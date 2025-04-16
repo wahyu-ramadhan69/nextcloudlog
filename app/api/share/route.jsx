@@ -1,17 +1,17 @@
 import fs from "fs";
+import ExcelJS from "exceljs";
 
 export async function GET(req) {
   try {
     const logPath = process.env.LOG_PATH;
 
     if (!logPath || !fs.existsSync(logPath)) {
-      return Response.json({ error: "Log file not found" }, { status: 404 });
+      return new Response("Log file not found", { status: 404 });
     }
 
     const { searchParams } = new URL(req.url);
-    const filterType = searchParams.get("filter") || "all"; // daily, weekly, monthly, all
+    const filterType = searchParams.get("filter") || "all";
 
-    // Peta permission code ke teks
     const permissionMap = {
       1: "Read",
       3: "Read, Edit",
@@ -51,7 +51,6 @@ export async function GET(req) {
         const match = entry.message.match(
           /The folder "(.*?)" .*? has been shared to the user "(.*?)" with permissions "(.*?)"/
         );
-
         const folderName = match?.[1] || "Unknown";
         const sharedTo = match?.[2] || "Unknown";
         const permissionCode = parseInt(match?.[3] || "0", 10);
@@ -59,40 +58,63 @@ export async function GET(req) {
           permissionMap[permissionCode] || `Permission ${permissionCode}`;
 
         return {
-          user: entry.user,
-          sharedTo: sharedTo,
-          method: entry.method,
-          url: entry.url,
-          message: `Folder dengan nama "${folderName}" telah di-share oleh "${entry.user}" kepada "${sharedTo}" dengan izin ${permissionText}`,
-          userAgent: entry.userAgent,
-          time: entry.time,
+          User: entry.user,
+          SharedTo: sharedTo,
+          Method: entry.method,
+          URL: entry.url,
+          Message: `Folder "${folderName}" telah di-share oleh "${entry.user}" kepada "${sharedTo}" dengan izin ${permissionText}`,
+          UserAgent: entry.userAgent,
+          Time: entry.time,
         };
       });
 
-    // Filter berdasarkan waktu
     const now = new Date();
-    const filteredLogs = logEntries.filter((log) => {
-      const logDate = new Date(log.time);
-      if (filterType === "daily") {
-        return logDate.toDateString() === now.toDateString();
-      } else if (filterType === "weekly") {
-        const oneWeekAgo = new Date();
-        oneWeekAgo.setDate(now.getDate() - 7);
-        return logDate >= oneWeekAgo;
-      } else if (filterType === "monthly") {
+    const filtered = logEntries.filter((log) => {
+      const date = new Date(log.Time);
+      if (filterType === "daily")
+        return date.toDateString() === now.toDateString();
+      if (filterType === "weekly") {
+        const lastWeek = new Date(now);
+        lastWeek.setDate(now.getDate() - 7);
+        return date >= lastWeek;
+      }
+      if (filterType === "monthly") {
         return (
-          logDate.getMonth() === now.getMonth() &&
-          logDate.getFullYear() === now.getFullYear()
+          date.getMonth() === now.getMonth() &&
+          date.getFullYear() === now.getFullYear()
         );
       }
       return true;
     });
 
-    // Urutkan berdasarkan waktu terbaru
-    filteredLogs.sort((a, b) => new Date(b.time) - new Date(a.time));
+    // Sort by time
+    filtered.sort((a, b) => new Date(b.Time) - new Date(a.Time));
 
-    return Response.json(filteredLogs, { status: 200 });
-  } catch (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+    // Create Excel
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Logs");
+
+    worksheet.columns = Object.keys(filtered[0] || {}).map((key) => ({
+      header: key,
+      key: key,
+      width: 30,
+    }));
+
+    filtered.forEach((item) => {
+      worksheet.addRow(item);
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    return new Response(buffer, {
+      status: 200,
+      headers: {
+        "Content-Type":
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename="log-${filterType}.xlsx"`,
+      },
+    });
+  } catch (err) {
+    return new Response("Internal Server Error", { status: 500 });
   }
 }

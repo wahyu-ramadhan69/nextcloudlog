@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "exceljs": "^4.4.0",
     "framer-motion": "^12.7.2",
     "ioredis": "^5.6.1",
     "lucide-react": "^0.488.0",
