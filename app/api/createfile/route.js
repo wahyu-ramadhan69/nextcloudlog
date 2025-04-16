@@ -9,7 +9,7 @@ export async function GET(req) {
     }
 
     const { searchParams } = new URL(req.url);
-    const filterType = searchParams.get("filter") || "all"; // daily, weekly, monthly, all
+    const filterType = searchParams.get("filter") || "daily"; // default menjadi "daily"
 
     const logs = fs.readFileSync(logPath, "utf8").split("\n").filter(Boolean);
     let logEntries = logs
@@ -26,7 +26,7 @@ export async function GET(req) {
           entry.message &&
           entry.message.includes("File with id") &&
           entry.message.includes("created") &&
-          entry.method === "MKCOL" // Menangkap hanya log folder yang dibuat
+          entry.method === "PUT"
       )
       .map((entry) => {
         const match = entry.message.match(
@@ -38,8 +38,9 @@ export async function GET(req) {
           user: entry.user,
           method: entry.method,
           url: entry.url,
-          message: `Folder dengan nama "${folderName}" telah dibuat oleh "${entry.user}"`,
+          message: `File dengan nama "${folderName}" telah dibuat/diupload oleh "${entry.user}"`,
           userAgent: entry.userAgent,
+          time: entry.time,
         };
       });
 
@@ -59,7 +60,7 @@ export async function GET(req) {
           logDate.getFullYear() === now.getFullYear()
         );
       }
-      return true; // default: tampilkan semua log
+      return true;
     });
 
     // Urutkan dari terbaru ke terlama

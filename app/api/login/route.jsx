@@ -25,7 +25,7 @@ export async function GET(req) {
           entry &&
           entry.message &&
           entry.message.includes("Login successful") &&
-          entry.url === "/login" // Hanya log dengan URL "/login"
+          entry.url === "/index.php/login" // Hanya log dengan URL "/login"
       )
       .map((entry) => ({
         user: entry.user,

@@ -11,25 +11,6 @@ export async function GET(req) {
     const { searchParams } = new URL(req.url);
     const filterType = searchParams.get("filter") || "all"; // daily, weekly, monthly, all
 
-    const permissionMap = {
-      1: "Read",
-      3: "Read, Edit",
-      5: "Read, Create",
-      7: "Read, Create, Edit",
-      9: "Read, Delete",
-      11: "Read, Edit, Delete",
-      13: "Read, Create, Delete",
-      15: "Read, Create, Edit, Delete",
-      17: "Read, Share",
-      19: "Read, Edit, Share",
-      21: "Read, Create, Share",
-      23: "Read, Create, Edit, Share",
-      25: "Read, Share, Delete",
-      27: "Read, Edit, Share, Delete",
-      29: "Read, Create, Share, Delete",
-      31: "Read, Create, Edit, Share, Delete",
-    };
-
     const logs = fs.readFileSync(logPath, "utf8").split("\n").filter(Boolean);
     let logEntries = logs
       .map((line) => {
@@ -40,29 +21,22 @@ export async function GET(req) {
         }
       })
       .filter(
-        (entry) =>
-          entry &&
-          entry.message &&
-          entry.message.includes("has been shared to the user")
+        (entry) => entry && entry.message && entry.message.includes("deleted:")
       )
       .map((entry) => {
         const match = entry.message.match(
-          /The folder "(.*?)" .*? has been shared to the user "(.*?)" with permissions "(.*?)"/
+          /File with id "(.*?)" deleted: "(.*?)"/
         );
-        const folderName = match ? match[1] : "Unknown";
-        const sharedTo = match ? match[2] : "Unknown";
-        const permission = match ? match[3] : "Unknown";
-
-        const permissionText =
-          permissionMap[permission] || `Permission ${permission}`;
+        const fileId = match ? match[1] : "Unknown";
+        const fileName = match ? match[2].trim() : "Unknown";
 
         return {
+          time: entry.time,
           user: entry.user,
           method: entry.method,
           url: entry.url,
-          message: `Folder dengan nama "${folderName}" telah di-share oleh "${entry.user}" kepada "${sharedTo}" dengan izin ${permissionText}`,
+          message: `File dengan nama "${fileName}" (ID: ${fileId}) telah dihapus oleh "${entry.user}"`,
           userAgent: entry.userAgent,
-          time: entry.time,
         };
       });
 

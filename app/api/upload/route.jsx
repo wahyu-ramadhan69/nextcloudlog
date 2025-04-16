@@ -33,6 +33,7 @@ export async function GET(req) {
         url: entry.url,
         message: entry.message,
         userAgent: entry.userAgent,
+        time: entry.time,
       }));
 
     // Filter berdasarkan waktu
