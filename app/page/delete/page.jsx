@@ -55,6 +55,14 @@ export default function DeleteFilesPage() {
             <option value="monthly">Bulanan</option>
             <option value="all">Semua</option>
           </select>
+          <button
+            onClick={() =>
+              window.open(`/api/delete/export?filter=${filterType}`, "_blank")
+            }
+            className="ml-3 bg-red-600 text-white px-3 py-1 rounded hover:bg-green-600 text-sm"
+          >
+            Download Excel
+          </button>
         </div>
       </div>
 

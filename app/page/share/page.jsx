@@ -59,7 +59,7 @@ export default function SharedFoldersPage() {
 
           <button
             onClick={() =>
-              window.open(`/api/share?filter=${filterType}`, "_blank")
+              window.open(`/api/share/export?filter=${filterType}`, "_blank")
             }
             className="ml-3 bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600 text-sm"
           >
