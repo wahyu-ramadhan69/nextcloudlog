@@ -4,64 +4,45 @@ import { useEffect, useState } from "react";
 import PageWrapper from "../../components/PageWrapper";
 
 export default function SharedFoldersPage() {
-  const [sharedLogs, setSharedLogs] = useState([]);
+  const [unshareLogs, setUnshareLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState(null);
   const [filterType, setFilterType] = useState("daily");
 
   useEffect(() => {
-    async function fetchLogs() {
+    async function fetchUnshareLogs() {
       setLoading(true);
       try {
-        const [createdRes, unshareRes] = await Promise.all([
-          fetch(`/api/share?filter=${filterType}&type=created`),
-          fetch(`/api/share?filter=${filterType}&type=unshare`),
-        ]);
+        const res = await fetch(`/api/unshare?filter=${filterType}`);
+        const data = await res.json();
 
-        const [createdData, unshareData] = await Promise.all([
-          createdRes.json(),
-          unshareRes.json(),
-        ]);
-
-        if (!createdRes.ok || !unshareRes.ok) {
-          throw new Error(
-            createdData.error || unshareData.error || "Gagal memuat data."
-          );
-        }
-
-        // Format data agar konsisten
-        const formatEntry = (data, actionType) =>
-          data.map((entry, index) => ({
-            id: `${actionType}-${index + 1}`,
+        if (res.ok) {
+          const formattedLogs = data.map((entry, index) => ({
+            id: index + 1,
             user: entry.user || "Unknown",
+            targetUser: entry.targetUser || "-",
             message: entry.message || "-",
             time: entry.time || "-",
-            action: actionType === "created" ? "Dibuat" : "Unshare",
           }));
 
-        const merged = [
-          ...formatEntry(createdData, "created"),
-          ...formatEntry(unshareData, "unshare"),
-        ];
-
-        // Sort berdasarkan waktu terbaru
-        merged.sort((a, b) => new Date(b.time) - new Date(a.time));
-
-        setSharedLogs(merged);
+          setUnshareLogs(formattedLogs);
+        } else {
+          setErrorMsg(data?.error || "Gagal memuat data unshare.");
+        }
       } catch (error) {
-        setErrorMsg(error.message || "Terjadi kesalahan saat mengambil data.");
+        setErrorMsg("Terjadi kesalahan saat mengambil data.");
       } finally {
         setLoading(false);
       }
     }
 
-    fetchLogs();
+    fetchUnshareLogs();
   }, [filterType]);
 
   return (
     <PageWrapper>
       <div className="flex justify-between items-center px-2">
-        <h1 className="text-2xl font-bold mb-4">Daftar Folder UnShar</h1>
+        <h1 className="text-2xl font-bold mb-4">Log Unshare Folder</h1>
 
         <div className="mb-4">
           <label className="text-sm font-medium mr-2">Filter Waktu:</label>
@@ -82,10 +63,8 @@ export default function SharedFoldersPage() {
         <p className="text-gray-500">Memuat data...</p>
       ) : errorMsg ? (
         <p className="text-red-500">{errorMsg}</p>
-      ) : sharedLogs.length === 0 ? (
-        <p className="text-gray-600">
-          Belum ada aktivitas sharing atau unshare folder.
-        </p>
+      ) : unshareLogs.length === 0 ? (
+        <p className="text-gray-600">Belum ada folder yang di-unshare.</p>
       ) : (
         <div className="bg-white p-4 rounded-xl shadow hover:shadow-md transition">
           <div className="overflow-x-auto">
@@ -94,17 +73,17 @@ export default function SharedFoldersPage() {
                 <tr className="bg-gray-100 text-gray-600 uppercase text-sm leading-normal">
                   <th className="py-3 px-6 text-left">ID</th>
                   <th className="py-3 px-6 text-left">User</th>
-                  <th className="py-3 px-6 text-left">Aksi</th>
+                  <th className="py-3 px-6 text-left">Di-Unshare Dari</th>
                   <th className="py-3 px-6 text-left">Deskripsi</th>
                   <th className="py-3 px-6 text-left">Waktu</th>
                 </tr>
               </thead>
               <tbody className="text-gray-700 text-sm">
-                {sharedLogs.map((item) => (
+                {unshareLogs.map((item) => (
                   <tr key={item.id} className="border-b hover:bg-gray-50">
                     <td className="py-3 px-6">{item.id}</td>
                     <td className="py-3 px-6">{item.user}</td>
-                    <td className="py-3 px-6">{item.action}</td>
+                    <td className="py-3 px-6">{item.targetUser}</td>
                     <td className="py-3 px-6">{item.message}</td>
                     <td className="py-3 px-6">{item.time}</td>
                   </tr>
