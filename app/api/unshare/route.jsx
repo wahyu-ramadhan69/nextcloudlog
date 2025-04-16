@@ -10,11 +10,10 @@ export async function GET(req) {
 
     const { searchParams } = new URL(req.url);
     const filterType = searchParams.get("filter") || "daily"; // daily, weekly, monthly, all
-    const logType = searchParams.get("type") || "created"; // created, unshare
 
     const logs = fs.readFileSync(logPath, "utf8").split("\n").filter(Boolean);
 
-    let logEntries = logs
+    const unshareLogs = logs
       .map((line) => {
         try {
           return JSON.parse(line);
@@ -22,56 +21,34 @@ export async function GET(req) {
           return null;
         }
       })
-      .filter((entry) => {
-        if (!entry || !entry.message || !entry.method) return false;
-
-        if (logType === "created") {
-          return (
-            entry.message.includes("File with id") &&
-            entry.message.includes("created") &&
-            entry.method === "MKCOL"
-          );
-        } else if (logType === "unshare") {
-          return (
-            entry.message.includes("has been unshared from the user") &&
-            entry.method === "DELETE"
-          );
-        }
-        return false;
-      })
+      .filter(
+        (entry) =>
+          entry &&
+          entry.message?.includes("has been unshared from the user") &&
+          entry.method === "DELETE"
+      )
       .map((entry) => {
-        let detailMessage = "";
-        let folderName = "Unknown";
-        let targetUser = "Unknown";
+        const match = entry.message.match(
+          /The folder "(.*?)" with ID ".*?" has been unshared from the user "(.*?)"/
+        );
 
-        if (logType === "created") {
-          const match = entry.message.match(
-            /File with id "(.*?)" created: "(.*?)"/
-          );
-          folderName = match ? match[2] : "Unknown";
-          detailMessage = `Folder dengan nama "${folderName}" telah dibuat oleh "${entry.user}"`;
-        } else if (logType === "unshare") {
-          const match = entry.message.match(
-            /The folder "(.*?)" with ID ".*?" has been unshared from the user "(.*?)"/
-          );
-          folderName = match ? match[1] : "Unknown";
-          targetUser = match ? match[2] : "Unknown";
-          detailMessage = `Folder "${folderName}" telah di-unshare oleh "${entry.user}" dari pengguna "${targetUser}"`;
-        }
+        const folderName = match ? match[1] : "Unknown";
+        const targetUser = match ? match[2] : "Unknown";
 
         return {
           user: entry.user,
+          targetUser,
           method: entry.method,
           url: entry.url,
-          message: detailMessage,
+          message: `Folder "${folderName}" telah di-unshare oleh "${entry.user}" dari pengguna "${targetUser}"`,
           userAgent: entry.userAgent,
           time: entry.time,
         };
       });
 
-    // Filter berdasarkan waktu
+    // Filter waktu
     const now = new Date();
-    logEntries = logEntries.filter((log) => {
+    const filteredLogs = unshareLogs.filter((log) => {
       const logDate = new Date(log.time);
       if (filterType === "daily") {
         return logDate.toDateString() === now.toDateString();
@@ -88,10 +65,9 @@ export async function GET(req) {
       return true;
     });
 
-    // Urutkan dari terbaru ke terlama
-    logEntries.sort((a, b) => new Date(b.time) - new Date(a.time));
+    filteredLogs.sort((a, b) => new Date(b.time) - new Date(a.time));
 
-    return Response.json(logEntries, { status: 200 });
+    return Response.json(filteredLogs, { status: 200 });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }
