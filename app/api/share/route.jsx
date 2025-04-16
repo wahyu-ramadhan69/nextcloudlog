@@ -11,6 +11,7 @@ export async function GET(req) {
     const { searchParams } = new URL(req.url);
     const filterType = searchParams.get("filter") || "all"; // daily, weekly, monthly, all
 
+    // Peta permission code ke teks
     const permissionMap = {
       1: "Read",
       3: "Read, Edit",
@@ -31,7 +32,8 @@ export async function GET(req) {
     };
 
     const logs = fs.readFileSync(logPath, "utf8").split("\n").filter(Boolean);
-    let logEntries = logs
+
+    const logEntries = logs
       .map((line) => {
         try {
           return JSON.parse(line);
@@ -49,15 +51,16 @@ export async function GET(req) {
         const match = entry.message.match(
           /The folder "(.*?)" .*? has been shared to the user "(.*?)" with permissions "(.*?)"/
         );
-        const folderName = match ? match[1] : "Unknown";
-        const sharedTo = match ? match[2] : "Unknown";
-        const permission = match ? match[3] : "Unknown";
 
+        const folderName = match?.[1] || "Unknown";
+        const sharedTo = match?.[2] || "Unknown";
+        const permissionCode = parseInt(match?.[3] || "0", 10);
         const permissionText =
-          permissionMap[permission] || `Permission ${permission}`;
+          permissionMap[permissionCode] || `Permission ${permissionCode}`;
 
         return {
           user: entry.user,
+          sharedTo: sharedTo,
           method: entry.method,
           url: entry.url,
           message: `Folder dengan nama "${folderName}" telah di-share oleh "${entry.user}" kepada "${sharedTo}" dengan izin ${permissionText}`,
@@ -66,9 +69,9 @@ export async function GET(req) {
         };
       });
 
-    // Filter waktu
+    // Filter berdasarkan waktu
     const now = new Date();
-    logEntries = logEntries.filter((log) => {
+    const filteredLogs = logEntries.filter((log) => {
       const logDate = new Date(log.time);
       if (filterType === "daily") {
         return logDate.toDateString() === now.toDateString();
@@ -85,10 +88,10 @@ export async function GET(req) {
       return true;
     });
 
-    // Urutkan terbaru ke terlama
-    logEntries.sort((a, b) => new Date(b.time) - new Date(a.time));
+    // Urutkan berdasarkan waktu terbaru
+    filteredLogs.sort((a, b) => new Date(b.time) - new Date(a.time));
 
-    return Response.json(logEntries, { status: 200 });
+    return Response.json(filteredLogs, { status: 200 });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }

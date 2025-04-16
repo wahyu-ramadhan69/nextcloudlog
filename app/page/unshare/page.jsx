@@ -16,6 +16,8 @@ export default function SharedFoldersPage() {
         const res = await fetch(`/api/unshare?filter=${filterType}`);
         const data = await res.json();
 
+        console.log(data);
+
         if (res.ok) {
           const formattedLogs = data.map((entry, index) => ({
             id: index + 1,
@@ -73,7 +75,7 @@ export default function SharedFoldersPage() {
                 <tr className="bg-gray-100 text-gray-600 uppercase text-sm leading-normal">
                   <th className="py-3 px-6 text-left">ID</th>
                   <th className="py-3 px-6 text-left">User</th>
-                  <th className="py-3 px-6 text-left">Di-Unshare Dari</th>
+                  <th className="py-3 px-6 text-left">Unshare To</th>
                   <th className="py-3 px-6 text-left">Deskripsi</th>
                   <th className="py-3 px-6 text-left">Waktu</th>
                 </tr>

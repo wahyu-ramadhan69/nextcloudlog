@@ -20,6 +20,7 @@ export default function SharedFoldersPage() {
           const formattedLogs = data.map((entry, index) => ({
             id: index + 1,
             user: entry.user || "Unknown",
+            sharedTo: entry.sharedTo || "Uknown",
             message: entry.message || "-",
             time: entry.time || "-",
           }));
@@ -72,6 +73,7 @@ export default function SharedFoldersPage() {
                 <tr className="bg-gray-100 text-gray-600 uppercase text-sm leading-normal">
                   <th className="py-3 px-6 text-left">ID</th>
                   <th className="py-3 px-6 text-left">User</th>
+                  <th className="py-3 px-6 text-left">Shared To</th>
                   <th className="py-3 px-6 text-left">Message</th>
                   <th className="py-3 px-6 text-left">Waktu</th>
                 </tr>
@@ -81,6 +83,7 @@ export default function SharedFoldersPage() {
                   <tr key={item.id} className="border-b hover:bg-gray-50">
                     <td className="py-3 px-6">{item.id}</td>
                     <td className="py-3 px-6">{item.user}</td>
+                    <td className="py-3 px-6">{item.sharedTo}</td>
                     <td className="py-3 px-6">{item.message}</td>
                     <td className="py-3 px-6">{item.time}</td>
                   </tr>
