@@ -9,7 +9,7 @@ export async function GET(req) {
     }
 
     const { searchParams } = new URL(req.url);
-    const filterType = searchParams.get("filter") || "all";
+    const filterType = searchParams.get("filter") || "daily";
 
     const logs = fs.readFileSync(logPath, "utf8").split("\n").filter(Boolean);
     let count = 0;
