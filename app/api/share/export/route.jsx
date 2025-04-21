@@ -60,6 +60,8 @@ export async function GET(req) {
         return {
           User: entry.user,
           SharedTo: sharedTo,
+          Folder: folderName,
+          Permission: permissionText,
           Method: entry.method,
           URL: entry.url,
           Message: `Folder "${folderName}" telah di-share oleh "${entry.user}" kepada "${sharedTo}" dengan izin ${permissionText}`,

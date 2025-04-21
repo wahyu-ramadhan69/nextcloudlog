@@ -34,6 +34,7 @@ export async function GET(req) {
 
         return {
           User: entry.user,
+          FileName: fileName,
           Method: entry.method,
           URL: entry.url,
           Message: `File "${fileName}" (ID: ${fileId}) telah dihapus oleh "${entry.user}"`,

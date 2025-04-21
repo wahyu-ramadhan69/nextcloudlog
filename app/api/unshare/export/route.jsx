@@ -39,6 +39,7 @@ export async function GET(req) {
         return {
           User: entry.user,
           TargetUser: targetUser,
+          FolderName: folderName,
           Method: entry.method,
           URL: entry.url,
           Message: `Folder "${folderName}" telah di-unshare oleh "${entry.user}" dari pengguna "${targetUser}"`,

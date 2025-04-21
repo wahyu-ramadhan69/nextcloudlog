@@ -38,6 +38,7 @@ export async function GET(req) {
 
         return {
           User: entry.user,
+          FolderName: folderName,
           Method: entry.method,
           URL: entry.url,
           Message: `Folder dengan nama "${folderName}" telah dibuat oleh "${entry.user}"`,

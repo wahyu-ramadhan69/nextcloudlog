@@ -38,6 +38,7 @@ export async function GET(req) {
 
         return {
           User: entry.user,
+          FileName: fileName,
           Method: entry.method,
           URL: entry.url,
           Message: `File dengan nama "${fileName}" telah diupload/dibuat oleh "${entry.user}"`,
