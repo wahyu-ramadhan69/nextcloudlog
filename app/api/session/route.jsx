@@ -6,7 +6,7 @@ import { NextResponse } from "next/server";
 export async function GET() {
   try {
     const connection = await mysql.createConnection({
-      host: "10.4.207.150", // ganti dengan host MySQL kamu
+      host: "192.168.1.133", // ganti dengan host MySQL kamu
       user: "root", // user MySQL Nextcloud
       password: "P@ssw0rd", // password MySQL
       database: "nextcloud", // nama database Nextcloud
