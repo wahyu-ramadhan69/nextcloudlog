@@ -1,4 +1,5 @@
 import fs from "fs";
+import readline from "readline";
 
 export async function GET(req) {
   try {
@@ -11,12 +12,16 @@ export async function GET(req) {
     const { searchParams } = new URL(req.url);
     const filterType = searchParams.get("filter") || "daily"; // daily, weekly, monthly, all
 
-    const logs = fs.readFileSync(logPath, "utf8").split("\n").filter(Boolean);
+    const now = new Date();
     let count = 0;
 
-    const now = new Date();
+    const fileStream = fs.createReadStream(logPath, { encoding: "utf8" });
+    const rl = readline.createInterface({
+      input: fileStream,
+      crlfDelay: Infinity,
+    });
 
-    logs.forEach((line) => {
+    for await (const line of rl) {
       try {
         const entry = JSON.parse(line);
 
@@ -41,9 +46,9 @@ export async function GET(req) {
           if (isIncluded) count++;
         }
       } catch {
-        // abaikan log yang tidak bisa di-parse
+        // skip jika gagal parse JSON
       }
-    });
+    }
 
     return Response.json({ totalDeleteEvents: count }, { status: 200 });
   } catch (error) {

@@ -1,4 +1,5 @@
 import fs from "fs";
+import readline from "readline";
 
 export async function GET(req) {
   try {
@@ -11,54 +12,67 @@ export async function GET(req) {
     const { searchParams } = new URL(req.url);
     const filterType = searchParams.get("filter") || "all"; // daily, weekly, monthly, all
 
-    const logs = fs.readFileSync(logPath, "utf8").split("\n").filter(Boolean);
-    let logEntries = logs
-      .map((line) => {
-        try {
-          return JSON.parse(line);
-        } catch (error) {
-          return null;
-        }
-      })
-      .filter(
-        (entry) =>
+    const now = new Date();
+    const logEntries = [];
+
+    const fileStream = fs.createReadStream(logPath, { encoding: "utf8" });
+    const rl = readline.createInterface({
+      input: fileStream,
+      crlfDelay: Infinity,
+    });
+
+    for await (const line of rl) {
+      try {
+        const entry = JSON.parse(line);
+
+        if (
           entry &&
           entry.message &&
           entry.message.includes("Login successful") &&
-          entry.url === "/index.php/login" // Hanya log dengan URL "/login"
-      )
-      .map((entry) => ({
-        user: entry.user,
-        method: entry.method,
-        url: entry.url,
-        message: entry.message,
-        userAgent: entry.userAgent,
-      }));
+          entry.url === "/index.php/login"
+        ) {
+          const logDate = new Date(entry.time);
+          let isIncluded = false;
 
-    // Filter berdasarkan waktu
-    const now = new Date();
-    logEntries = logEntries.filter((log) => {
-      const logDate = new Date(log.time);
-      if (filterType === "daily") {
-        return logDate.toDateString() === now.toDateString();
-      } else if (filterType === "weekly") {
-        const oneWeekAgo = new Date();
-        oneWeekAgo.setDate(now.getDate() - 7);
-        return logDate >= oneWeekAgo;
-      } else if (filterType === "monthly") {
-        return (
-          logDate.getMonth() === now.getMonth() &&
-          logDate.getFullYear() === now.getFullYear()
-        );
+          if (filterType === "daily") {
+            isIncluded = logDate.toDateString() === now.toDateString();
+          } else if (filterType === "weekly") {
+            const oneWeekAgo = new Date();
+            oneWeekAgo.setDate(now.getDate() - 7);
+            isIncluded = logDate >= oneWeekAgo;
+          } else if (filterType === "monthly") {
+            isIncluded =
+              logDate.getMonth() === now.getMonth() &&
+              logDate.getFullYear() === now.getFullYear();
+          } else {
+            isIncluded = true;
+          }
+
+          if (isIncluded) {
+            logEntries.push({
+              user: entry.user,
+              method: entry.method,
+              url: entry.url,
+              message: entry.message,
+              userAgent: entry.userAgent,
+              time: entry.time,
+            });
+          }
+        }
+      } catch {
+        // skip line if JSON parsing fails
       }
-      return true; // default: tampilkan semua log
-    });
+    }
 
-    // Urutkan dari terbaru ke terlama
+    // Urutkan terbaru ke terlama
     logEntries.sort((a, b) => new Date(b.time) - new Date(a.time));
 
-    return Response.json(logEntries, { status: 200 });
+    // Ambil maksimal 50 entri
+    const limitedEntries = logEntries.slice(0, 50);
+
+    return Response.json(limitedEntries, { status: 200 });
   } catch (error) {
+    console.error("Error parsing login logs:", error);
     return Response.json({ error: error.message }, { status: 500 });
   }
 }

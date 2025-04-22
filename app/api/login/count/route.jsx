@@ -1,4 +1,5 @@
 import fs from "fs";
+import readline from "readline";
 
 export async function GET(req) {
   try {
@@ -11,11 +12,16 @@ export async function GET(req) {
     const { searchParams } = new URL(req.url);
     const filterType = searchParams.get("filter") || "daily";
 
-    const logs = fs.readFileSync(logPath, "utf8").split("\n").filter(Boolean);
-    let count = 0;
     const now = new Date();
+    let count = 0;
 
-    logs.forEach((line) => {
+    const fileStream = fs.createReadStream(logPath, { encoding: "utf8" });
+    const rl = readline.createInterface({
+      input: fileStream,
+      crlfDelay: Infinity,
+    });
+
+    for await (const line of rl) {
       try {
         const entry = JSON.parse(line);
 
@@ -45,9 +51,9 @@ export async function GET(req) {
           if (isIncluded) count++;
         }
       } catch {
-        // skip jika tidak bisa di-parse
+        // abaikan baris jika gagal parsing
       }
-    });
+    }
 
     return Response.json({ totalLoginSuccess: count }, { status: 200 });
   } catch (error) {

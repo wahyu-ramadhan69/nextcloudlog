@@ -1,4 +1,5 @@
 import fs from "fs";
+import readline from "readline";
 import ExcelJS from "exceljs";
 
 export async function GET(req) {
@@ -31,68 +32,71 @@ export async function GET(req) {
       31: "Read, Create, Edit, Share, Delete",
     };
 
-    const logs = fs.readFileSync(logPath, "utf8").split("\n").filter(Boolean);
+    const now = new Date();
+    const filtered = [];
 
-    const logEntries = logs
-      .map((line) => {
-        try {
-          return JSON.parse(line);
-        } catch {
-          return null;
-        }
-      })
-      .filter(
-        (entry) =>
+    const fileStream = fs.createReadStream(logPath, { encoding: "utf8" });
+    const rl = readline.createInterface({
+      input: fileStream,
+      crlfDelay: Infinity,
+    });
+
+    for await (const line of rl) {
+      try {
+        const entry = JSON.parse(line);
+
+        if (
           entry &&
           entry.message &&
           entry.message.includes("has been shared to the user")
-      )
-      .map((entry) => {
-        const match = entry.message.match(
-          /The folder "(.*?)" .*? has been shared to the user "(.*?)" with permissions "(.*?)"/
-        );
-        const folderName = match?.[1] || "Unknown";
-        const sharedTo = match?.[2] || "Unknown";
-        const permissionCode = parseInt(match?.[3] || "0", 10);
-        const permissionText =
-          permissionMap[permissionCode] || `Permission ${permissionCode}`;
+        ) {
+          const match = entry.message.match(
+            /The folder "(.*?)" .*? has been shared to the user "(.*?)" with permissions "(.*?)"/
+          );
+          const folderName = match?.[1] || "Unknown";
+          const sharedTo = match?.[2] || "Unknown";
+          const permissionCode = parseInt(match?.[3] || "0", 10);
+          const permissionText =
+            permissionMap[permissionCode] || `Permission ${permissionCode}`;
 
-        return {
-          User: entry.user,
-          SharedTo: sharedTo,
-          Folder: folderName,
-          Permission: permissionText,
-          Method: entry.method,
-          URL: entry.url,
-          Message: `Folder "${folderName}" telah di-share oleh "${entry.user}" kepada "${sharedTo}" dengan izin ${permissionText}`,
-          UserAgent: entry.userAgent,
-          Time: entry.time,
-        };
-      });
+          const logDate = new Date(entry.time);
+          let isIncluded = false;
 
-    const now = new Date();
-    const filtered = logEntries.filter((log) => {
-      const date = new Date(log.Time);
-      if (filterType === "daily")
-        return date.toDateString() === now.toDateString();
-      if (filterType === "weekly") {
-        const lastWeek = new Date(now);
-        lastWeek.setDate(now.getDate() - 7);
-        return date >= lastWeek;
+          if (filterType === "daily") {
+            isIncluded = logDate.toDateString() === now.toDateString();
+          } else if (filterType === "weekly") {
+            const lastWeek = new Date(now);
+            lastWeek.setDate(now.getDate() - 7);
+            isIncluded = logDate >= lastWeek;
+          } else if (filterType === "monthly") {
+            isIncluded =
+              logDate.getMonth() === now.getMonth() &&
+              logDate.getFullYear() === now.getFullYear();
+          } else {
+            isIncluded = true;
+          }
+
+          if (isIncluded) {
+            filtered.push({
+              User: entry.user,
+              SharedTo: sharedTo,
+              Folder: folderName,
+              Permission: permissionText,
+              Method: entry.method,
+              URL: entry.url,
+              Message: `Folder "${folderName}" telah di-share oleh "${entry.user}" kepada "${sharedTo}" dengan izin ${permissionText}`,
+              UserAgent: entry.userAgent,
+              Time: entry.time,
+            });
+          }
+        }
+      } catch {
+        // skip
       }
-      if (filterType === "monthly") {
-        return (
-          date.getMonth() === now.getMonth() &&
-          date.getFullYear() === now.getFullYear()
-        );
-      }
-      return true;
-    });
+    }
 
-    // Sort by time
     filtered.sort((a, b) => new Date(b.Time) - new Date(a.Time));
 
-    // Create Excel
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Logs");
 

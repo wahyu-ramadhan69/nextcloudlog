@@ -1,4 +1,5 @@
 import fs from "fs";
+import readline from "readline";
 import ExcelJS from "exceljs";
 
 export async function GET(req) {
@@ -12,65 +13,68 @@ export async function GET(req) {
     const { searchParams } = new URL(req.url);
     const filterType = searchParams.get("filter") || "daily";
 
-    const logs = fs.readFileSync(logPath, "utf8").split("\n").filter(Boolean);
+    const now = new Date();
+    const filtered = [];
 
-    const unshareLogs = logs
-      .map((line) => {
-        try {
-          return JSON.parse(line);
-        } catch {
-          return null;
-        }
-      })
-      .filter(
-        (entry) =>
+    const fileStream = fs.createReadStream(logPath, { encoding: "utf8" });
+    const rl = readline.createInterface({
+      input: fileStream,
+      crlfDelay: Infinity,
+    });
+
+    for await (const line of rl) {
+      try {
+        const entry = JSON.parse(line);
+
+        if (
           entry &&
           entry.message?.includes("has been unshared from the user") &&
           entry.method === "DELETE"
-      )
-      .map((entry) => {
-        const match = entry.message.match(
-          /The folder "(.*?)" with ID ".*?" has been unshared from the user "(.*?)"/
-        );
+        ) {
+          const match = entry.message.match(
+            /The folder "(.*?)" with ID ".*?" has been unshared from the user "(.*?)"/
+          );
 
-        const folderName = match?.[1] || "Unknown";
-        const targetUser = match?.[2] || "Unknown";
+          const folderName = match?.[1] || "Unknown";
+          const targetUser = match?.[2] || "Unknown";
 
-        return {
-          User: entry.user,
-          TargetUser: targetUser,
-          FolderName: folderName,
-          Method: entry.method,
-          URL: entry.url,
-          Message: `Folder "${folderName}" telah di-unshare oleh "${entry.user}" dari pengguna "${targetUser}"`,
-          UserAgent: entry.userAgent,
-          Time: entry.time,
-        };
-      });
+          const logDate = new Date(entry.time);
+          let isIncluded = false;
 
-    const now = new Date();
-    const filtered = unshareLogs.filter((log) => {
-      const date = new Date(log.Time);
-      if (filterType === "daily")
-        return date.toDateString() === now.toDateString();
-      if (filterType === "weekly") {
-        const lastWeek = new Date(now);
-        lastWeek.setDate(now.getDate() - 7);
-        return date >= lastWeek;
+          if (filterType === "daily") {
+            isIncluded = logDate.toDateString() === now.toDateString();
+          } else if (filterType === "weekly") {
+            const lastWeek = new Date(now);
+            lastWeek.setDate(now.getDate() - 7);
+            isIncluded = logDate >= lastWeek;
+          } else if (filterType === "monthly") {
+            isIncluded =
+              logDate.getMonth() === now.getMonth() &&
+              logDate.getFullYear() === now.getFullYear();
+          } else {
+            isIncluded = true;
+          }
+
+          if (isIncluded) {
+            filtered.push({
+              User: entry.user,
+              TargetUser: targetUser,
+              FolderName: folderName,
+              Method: entry.method,
+              URL: entry.url,
+              Message: `Folder "${folderName}" telah di-unshare oleh "${entry.user}" dari pengguna "${targetUser}"`,
+              UserAgent: entry.userAgent,
+              Time: entry.time,
+            });
+          }
+        }
+      } catch {
+        // skip
       }
-      if (filterType === "monthly") {
-        return (
-          date.getMonth() === now.getMonth() &&
-          date.getFullYear() === now.getFullYear()
-        );
-      }
-      return true;
-    });
+    }
 
-    // Sort by time
     filtered.sort((a, b) => new Date(b.Time) - new Date(a.Time));
 
-    // Create Excel
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Unshared Logs");
 

@@ -1,4 +1,5 @@
 import fs from "fs";
+import readline from "readline";
 import ExcelJS from "exceljs";
 
 export async function GET(req) {
@@ -12,59 +13,64 @@ export async function GET(req) {
     const { searchParams } = new URL(req.url);
     const filterType = searchParams.get("filter") || "daily";
 
-    const logs = fs.readFileSync(logPath, "utf8").split("\n").filter(Boolean);
+    const now = new Date();
+    const logEntries = [];
 
-    let logEntries = logs
-      .map((line) => {
-        try {
-          return JSON.parse(line);
-        } catch {
-          return null;
-        }
-      })
-      .filter(
-        (entry) =>
+    const fileStream = fs.createReadStream(logPath, { encoding: "utf8" });
+    const rl = readline.createInterface({
+      input: fileStream,
+      crlfDelay: Infinity,
+    });
+
+    for await (const line of rl) {
+      try {
+        const entry = JSON.parse(line);
+
+        if (
           entry &&
           entry.message &&
           entry.message.includes("File with id") &&
           entry.message.includes("created") &&
-          entry.method !== "MKCOL" // Pastikan bukan folder
-      )
-      .map((entry) => {
-        const match = entry.message.match(
-          /File with id "(.*?)" created: "(.*?)"/
-        );
-        const fileName = match?.[2] || "Unknown";
+          entry.method !== "MKCOL"
+        ) {
+          const match = entry.message.match(
+            /File with id "(.*?)" created: "(.*?)"/
+          );
+          const fileName = match?.[2] || "Unknown";
 
-        return {
-          User: entry.user,
-          FileName: fileName,
-          Method: entry.method,
-          URL: entry.url,
-          Message: `File dengan nama "${fileName}" telah diupload/dibuat oleh "${entry.user}"`,
-          UserAgent: entry.userAgent,
-          Time: entry.time,
-        };
-      });
+          const logTime = new Date(entry.time);
+          let isIncluded = false;
 
-    const now = new Date();
-    logEntries = logEntries.filter((log) => {
-      const date = new Date(log.Time);
-      if (filterType === "daily")
-        return date.toDateString() === now.toDateString();
-      if (filterType === "weekly") {
-        const lastWeek = new Date(now);
-        lastWeek.setDate(now.getDate() - 7);
-        return date >= lastWeek;
+          if (filterType === "daily") {
+            isIncluded = logTime.toDateString() === now.toDateString();
+          } else if (filterType === "weekly") {
+            const lastWeek = new Date(now);
+            lastWeek.setDate(now.getDate() - 7);
+            isIncluded = logTime >= lastWeek;
+          } else if (filterType === "monthly") {
+            isIncluded =
+              logTime.getMonth() === now.getMonth() &&
+              logTime.getFullYear() === now.getFullYear();
+          } else {
+            isIncluded = true;
+          }
+
+          if (isIncluded) {
+            logEntries.push({
+              User: entry.user,
+              FileName: fileName,
+              Method: entry.method,
+              URL: entry.url,
+              Message: `File dengan nama "${fileName}" telah diupload/dibuat oleh "${entry.user}"`,
+              UserAgent: entry.userAgent,
+              Time: entry.time,
+            });
+          }
+        }
+      } catch {
+        // skip
       }
-      if (filterType === "monthly") {
-        return (
-          date.getMonth() === now.getMonth() &&
-          date.getFullYear() === now.getFullYear()
-        );
-      }
-      return true;
-    });
+    }
 
     logEntries.sort((a, b) => new Date(b.Time) - new Date(a.Time));
 

@@ -1,4 +1,5 @@
 import fs from "fs";
+import readline from "readline";
 
 export async function GET(req) {
   try {
@@ -9,45 +10,53 @@ export async function GET(req) {
     }
 
     const { searchParams } = new URL(req.url);
-    const filterType = searchParams.get("filter") || "daily"; // ✅ default diubah ke daily
+    const filterType = searchParams.get("filter") || "daily";
 
-    const logs = fs.readFileSync(logPath, "utf8").split("\n").filter(Boolean);
-    let logEntries = logs
-      .map((line) => {
-        try {
-          return JSON.parse(line);
-        } catch {
-          return null;
-        }
-      })
-      .filter(
-        (entry) =>
+    const now = new Date();
+    let totalSharedFiles = 0;
+
+    const fileStream = fs.createReadStream(logPath, { encoding: "utf8" });
+    const rl = readline.createInterface({
+      input: fileStream,
+      crlfDelay: Infinity,
+    });
+
+    for await (const line of rl) {
+      try {
+        const entry = JSON.parse(line);
+
+        if (
           entry &&
           entry.message &&
           entry.message.includes("has been shared to the user")
-      );
+        ) {
+          const logDate = new Date(entry.time);
+          let isIncluded = false;
 
-    const now = new Date();
-    logEntries = logEntries.filter((log) => {
-      const logDate = new Date(log.time);
-      if (filterType === "daily") {
-        return logDate.toDateString() === now.toDateString();
-      } else if (filterType === "weekly") {
-        const oneWeekAgo = new Date();
-        oneWeekAgo.setDate(now.getDate() - 7);
-        return logDate >= oneWeekAgo;
-      } else if (filterType === "monthly") {
-        return (
-          logDate.getMonth() === now.getMonth() &&
-          logDate.getFullYear() === now.getFullYear()
-        );
+          if (filterType === "daily") {
+            isIncluded = logDate.toDateString() === now.toDateString();
+          } else if (filterType === "weekly") {
+            const oneWeekAgo = new Date();
+            oneWeekAgo.setDate(now.getDate() - 7);
+            isIncluded = logDate >= oneWeekAgo;
+          } else if (filterType === "monthly") {
+            isIncluded =
+              logDate.getMonth() === now.getMonth() &&
+              logDate.getFullYear() === now.getFullYear();
+          } else {
+            isIncluded = true;
+          }
+
+          if (isIncluded) totalSharedFiles++;
+        }
+      } catch {
+        // skip
       }
-      return true;
-    });
+    }
 
     return Response.json(
       {
-        totalSharedFiles: logEntries.length,
+        totalSharedFiles,
         filter: filterType,
       },
       { status: 200 }

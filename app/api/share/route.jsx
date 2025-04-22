@@ -1,4 +1,5 @@
 import fs from "fs";
+import readline from "readline";
 
 export async function GET(req) {
   try {
@@ -9,9 +10,8 @@ export async function GET(req) {
     }
 
     const { searchParams } = new URL(req.url);
-    const filterType = searchParams.get("filter") || "all"; // daily, weekly, monthly, all
+    const filterType = searchParams.get("filter") || "all";
 
-    // Peta permission code ke teks
     const permissionMap = {
       1: "Read",
       3: "Read, Edit",
@@ -31,68 +31,77 @@ export async function GET(req) {
       31: "Read, Create, Edit, Share, Delete",
     };
 
-    const logs = fs.readFileSync(logPath, "utf8").split("\n").filter(Boolean);
+    const now = new Date();
+    const filteredLogs = [];
 
-    const logEntries = logs
-      .map((line) => {
-        try {
-          return JSON.parse(line);
-        } catch {
-          return null;
-        }
-      })
-      .filter(
-        (entry) =>
+    const fileStream = fs.createReadStream(logPath, { encoding: "utf8" });
+    const rl = readline.createInterface({
+      input: fileStream,
+      crlfDelay: Infinity,
+    });
+
+    for await (const line of rl) {
+      try {
+        const entry = JSON.parse(line);
+
+        if (
           entry &&
           entry.message &&
           entry.message.includes("has been shared to the user")
-      )
-      .map((entry) => {
-        const match = entry.message.match(
-          /The folder "(.*?)" .*? has been shared to the user "(.*?)" with permissions "(.*?)"/
-        );
+        ) {
+          const match = entry.message.match(
+            /The folder "(.*?)" .*? has been shared to the user "(.*?)" with permissions "(.*?)"/
+          );
 
-        const folderName = match?.[1] || "Unknown";
-        const sharedTo = match?.[2] || "Unknown";
-        const permissionCode = parseInt(match?.[3] || "0", 10);
-        const permissionText =
-          permissionMap[permissionCode] || `Permission ${permissionCode}`;
+          const folderName = match?.[1] || "Unknown";
+          const sharedTo = match?.[2] || "Unknown";
+          const permissionCode = parseInt(match?.[3] || "0", 10);
+          const permissionText =
+            permissionMap[permissionCode] || `Permission ${permissionCode}`;
 
-        return {
-          user: entry.user,
-          sharedTo: sharedTo,
-          method: entry.method,
-          url: entry.url,
-          message: `Folder dengan nama "${folderName}" telah di-share oleh "${entry.user}" kepada "${sharedTo}" dengan izin ${permissionText}`,
-          userAgent: entry.userAgent,
-          time: entry.time,
-        };
-      });
+          const logDate = new Date(entry.time);
+          let isIncluded = false;
 
-    // Filter berdasarkan waktu
-    const now = new Date();
-    const filteredLogs = logEntries.filter((log) => {
-      const logDate = new Date(log.time);
-      if (filterType === "daily") {
-        return logDate.toDateString() === now.toDateString();
-      } else if (filterType === "weekly") {
-        const oneWeekAgo = new Date();
-        oneWeekAgo.setDate(now.getDate() - 7);
-        return logDate >= oneWeekAgo;
-      } else if (filterType === "monthly") {
-        return (
-          logDate.getMonth() === now.getMonth() &&
-          logDate.getFullYear() === now.getFullYear()
-        );
+          if (filterType === "daily") {
+            isIncluded = logDate.toDateString() === now.toDateString();
+          } else if (filterType === "weekly") {
+            const oneWeekAgo = new Date();
+            oneWeekAgo.setDate(now.getDate() - 7);
+            isIncluded = logDate >= oneWeekAgo;
+          } else if (filterType === "monthly") {
+            isIncluded =
+              logDate.getMonth() === now.getMonth() &&
+              logDate.getFullYear() === now.getFullYear();
+          } else {
+            isIncluded = true;
+          }
+
+          if (isIncluded) {
+            filteredLogs.push({
+              user: entry.user,
+              sharedTo: sharedTo,
+              method: entry.method,
+              url: entry.url,
+              message: `Folder dengan nama "${folderName}" telah di-share oleh "${entry.user}" kepada "${sharedTo}" dengan izin ${permissionText}`,
+              userAgent: entry.userAgent,
+              time: entry.time,
+            });
+          }
+        }
+      } catch {
+        // skip jika tidak bisa parse
       }
-      return true;
-    });
+    }
 
-    // Urutkan berdasarkan waktu terbaru
+    // Urutkan log dari terbaru ke terlama
     filteredLogs.sort((a, b) => new Date(b.time) - new Date(a.time));
 
-    return Response.json(filteredLogs, { status: 200 });
+    // Ambil hanya 50 entri terbaru
+    const limitedLogs = filteredLogs.slice(0, 50);
+
+    return Response.json(limitedLogs, { status: 200 });
   } catch (error) {
+    console.error("Error processing shared folder logs:", error);
     return Response.json({ error: error.message }, { status: 500 });
   }
 }

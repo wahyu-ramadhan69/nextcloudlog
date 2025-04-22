@@ -3,52 +3,31 @@
 import { useEffect, useState } from "react";
 import Card from "../../components/Card";
 import PageWrapper from "../../components/PageWrapper";
-import CardServer from "../../components/CardServer";
 
 export default function Dashboard() {
   const [loginCount, setLoginCount] = useState("Loading...");
-  const [delCount, setDelCount] = useState("Loading...");
   const [sesCount, setSesCount] = useState("Loading...");
+  const [delCount, setDelCount] = useState("Loading...");
   const [createFileCount, setCreateFileCount] = useState("Loading...");
   const [createFolderCount, setCreateFolderCount] = useState("Loading...");
   const [shareCount, setShareCount] = useState("Loading...");
 
+  // Fetch prioritas tinggi: login dan sesi
   useEffect(() => {
-    async function fetchDashboardData() {
+    async function fetchInitialData() {
       try {
-        const [
-          loginRes,
-          delRes,
-          sesRes,
-          createFileRes,
-          createFolderRes,
-          shareRes,
-        ] = await Promise.all([
+        const [loginRes, sesRes] = await Promise.all([
           fetch("/api/login/count"),
-          fetch("/api/delete/count"),
           fetch("/api/session"),
-          fetch("/api/createfile/count"),
-          fetch("/api/createfolder/count"),
-          fetch("/api/share/count"),
         ]);
 
         const loginData = await loginRes.json();
-        const delData = await delRes.json();
         const sesData = await sesRes.json();
-        const createFileData = await createFileRes.json();
-        const createFolderData = await createFolderRes.json();
-        const shareData = await shareRes.json();
 
         if (loginRes.ok && loginData?.totalLoginSuccess !== undefined) {
           setLoginCount(loginData.totalLoginSuccess.toString());
         } else {
           setLoginCount("Error");
-        }
-
-        if (delRes.ok && delData?.totalDeleteEvents !== undefined) {
-          setDelCount(delData.totalDeleteEvents.toString());
-        } else {
-          setDelCount("Error");
         }
 
         if (sesRes.ok && sesData?.online_users_count !== undefined) {
@@ -57,42 +36,60 @@ export default function Dashboard() {
           setSesCount("Error");
         }
 
-        if (
-          createFileRes.ok &&
-          createFileData?.totalCreateFileEvents !== undefined
-        ) {
-          setCreateFileCount(createFileData.totalCreateFileEvents.toString());
-        } else {
-          setCreateFileCount("Error");
-        }
-
-        if (
-          createFolderRes.ok &&
-          createFolderData?.totalCreateFolderEvents !== undefined
-        ) {
-          setCreateFolderCount(
-            createFolderData.totalCreateFolderEvents.toString()
-          );
-        } else {
-          setCreateFolderCount("Error");
-        }
-
-        if (shareRes.ok && shareData?.totalSharedFiles !== undefined) {
-          setShareCount(shareData.totalSharedFiles.toString());
-        } else {
-          setShareCount("Error");
-        }
+        // Setelah yang penting tampil, fetch sisanya di background
+        fetchSecondaryData();
       } catch (error) {
         setLoginCount("Error");
-        setDelCount("Error");
         setSesCount("Error");
+        // Tetap lanjutkan secondary fetch meskipun error awal
+        fetchSecondaryData();
+      }
+    }
+
+    async function fetchSecondaryData() {
+      try {
+        const delRes = await fetch("/api/delete/count");
+        const delData = await delRes.json();
+        setDelCount(
+          delRes.ok && delData?.totalDeleteEvents !== undefined
+            ? delData.totalDeleteEvents.toString()
+            : "Error"
+        );
+
+        const createFileRes = await fetch("/api/createfile/count");
+        const createFileData = await createFileRes.json();
+        setCreateFileCount(
+          createFileRes.ok &&
+            createFileData?.totalCreateFileEvents !== undefined
+            ? createFileData.totalCreateFileEvents.toString()
+            : "Error"
+        );
+
+        const createFolderRes = await fetch("/api/createfolder/count");
+        const createFolderData = await createFolderRes.json();
+        setCreateFolderCount(
+          createFolderRes.ok &&
+            createFolderData?.totalCreateFolderEvents !== undefined
+            ? createFolderData.totalCreateFolderEvents.toString()
+            : "Error"
+        );
+
+        const shareRes = await fetch("/api/share/count");
+        const shareData = await shareRes.json();
+        setShareCount(
+          shareRes.ok && shareData?.totalSharedFiles !== undefined
+            ? shareData.totalSharedFiles.toString()
+            : "Error"
+        );
+      } catch (error) {
+        setDelCount("Error");
         setCreateFileCount("Error");
         setCreateFolderCount("Error");
         setShareCount("Error");
       }
     }
 
-    fetchDashboardData();
+    fetchInitialData();
   }, []);
 
   return (
