@@ -60,10 +60,24 @@ export default function Sidebar() {
         </Link>
 
         <Link
+          href="/page/accessfile"
+          className="flex items-center p-2 text-gray-700 hover:bg-gray-100 rounded"
+        >
+          <FcUndo className="w-5 h-5 mr-2" /> Access FIle
+        </Link>
+
+        <Link
           href="/page/delete"
           className="flex items-center p-2 text-gray-700 hover:bg-gray-100 rounded"
         >
           <FcFullTrash className="w-5 h-5 mr-2" /> Delete Files
+        </Link>
+
+        <Link
+          href="/page/deletefolder"
+          className="flex items-center p-2 text-gray-700 hover:bg-gray-100 rounded"
+        >
+          <FcFullTrash className="w-5 h-5 mr-2" /> Delete Folder
         </Link>
 
         <Link
