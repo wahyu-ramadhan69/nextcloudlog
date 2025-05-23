@@ -20,7 +20,7 @@ export default function DeletedFoldersPage() {
           const formatted = data.map((entry, index) => ({
             id: index + 1,
             user: entry.user || "Unknown",
-            path: entry.path || "-",
+            path: entry.folderPath || "-",
             message: entry.message || "-",
             time: entry.time || "-",
           }));
