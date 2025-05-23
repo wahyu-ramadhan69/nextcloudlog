@@ -6,15 +6,26 @@ import { useRouter } from "next/navigation";
 
 export default function Header() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [username, setUsername] = useState("User");
   const router = useRouter();
   const dropdownRef = useRef();
 
   const handleLogout = () => {
-    document.cookie = "auth-token=; Max-Age=0; path=/"; // clear cookie
+    document.cookie = "auth-token=; Max-Age=0; path=/"; // hapus cookie
     router.push("/login");
   };
 
-  // Close dropdown saat klik di luar area
+  useEffect(() => {
+    // Ambil auth-token dari cookie dan ekstrak username
+    const match = document.cookie.match(/auth-token=([^;]+)/);
+    if (match) {
+      const token = match[1]; // contoh: admin_uid_12345
+      const name = token.split("_")[0]; // ambil 'admin' dari 'admin_uid_12345'
+      setUsername(name.charAt(0).toUpperCase() + name.slice(1)); // Kapitalisasi
+    }
+  }, []);
+
+  // Tutup dropdown jika klik di luar
   useEffect(() => {
     function handleClickOutside(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -29,7 +40,7 @@ export default function Header() {
     <div className="bg-white shadow px-6 py-4 flex items-center justify-between relative">
       <h1 className="text-xl font-semibold">Dashboard</h1>
       <div className="flex items-center space-x-4" ref={dropdownRef}>
-        <span className="text-gray-600">Welcome, Admin</span>
+        <span className="text-gray-600">Welcome, {username}</span>
         <div className="relative">
           <button onClick={() => setDropdownOpen(!dropdownOpen)}>
             <Image

@@ -1,4 +1,3 @@
-// middleware.js
 import { NextResponse } from "next/server";
 
 export function middleware(request) {
@@ -9,8 +8,10 @@ export function middleware(request) {
     return NextResponse.next();
   }
 
-  // Jika tidak ada token atau token salah → redirect ke login
-  if (token !== "admin_uid_12345") {
+  // Token valid untuk user admin atau audit
+  const allowedTokens = ["admin_uid_12345", "audit_uid_12345"];
+
+  if (!allowedTokens.includes(token)) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
