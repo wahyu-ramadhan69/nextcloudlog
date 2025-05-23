@@ -30,14 +30,17 @@ export async function GET(req) {
       try {
         const entry = JSON.parse(line);
 
-        if (entry?.message?.includes("deleted:")) {
-          const match = entry.message.match(
-            /File with id "(.*?)" deleted: "(.*?)"/
-          );
-          const fileId = match?.[1] || "Unknown";
-          const fileName = match?.[2]?.trim();
+        const isDeleteMethod = entry.method === "DELETE";
+        const isDeleteMessage = entry.message?.includes("File with id");
+        const isFilesUrl = entry.url?.includes("/remote.php/dav/files/");
 
-          const isFolder = !fileName; // nama kosong berarti folder
+        if (isDeleteMethod && isDeleteMessage && isFilesUrl) {
+          // Ambil path terakhir untuk menentukan apakah ini file atau folder
+          const pathParts = entry.url.split("/");
+          const lastSegment = decodeURIComponent(
+            pathParts[pathParts.length - 1] || ""
+          );
+          const isFolder = !lastSegment.includes(".");
 
           if (isFolder) {
             const logDate = new Date(entry.time);
@@ -58,9 +61,14 @@ export async function GET(req) {
             }
 
             if (isIncluded) {
+              const match = entry.message.match(
+                /File with id "(.*?)" deleted: "(.*?)"/
+              );
+              const fileId = match?.[1] || "Unknown";
+
               folderLogs.push({
                 user: entry.user,
-                folderPath: entry.url,
+                folderPath: decodeURIComponent(entry.url),
                 method: entry.method,
                 message: `Folder dengan ID "${fileId}" telah dihapus oleh "${entry.user}"`,
                 userAgent: entry.userAgent,
@@ -70,7 +78,7 @@ export async function GET(req) {
           }
         }
       } catch {
-        // Skip invalid JSON line
+        // Skip baris yang bukan JSON valid
       }
     }
 
