@@ -9,8 +9,10 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
 
   const handleLogin = useCallback(() => {
-    if (username === "admin" && password === "P@ssw0rd") {
-      document.cookie = `auth-token=admin_uid_12345; path=/`;
+    const allowedUsers = ["admin", "audit", "infra"];
+
+    if (allowedUsers.includes(username) && password === "P@ssw0rd") {
+      document.cookie = `auth-token=${username}_uid_12345; path=/`;
       router.push("/page/dashboard");
     } else {
       alert("Username atau Password salah!");
