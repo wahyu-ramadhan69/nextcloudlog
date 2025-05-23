@@ -20,15 +20,18 @@ export async function GET(req) {
       crlfDelay: Infinity,
     });
 
-    const logEntries = [];
+    const onlyOfficeLogs = [];
 
     for await (const line of rl) {
       try {
         const entry = JSON.parse(line);
 
-        if (entry && entry.message && entry.message.includes("deleted:")) {
+        if (
+          entry?.message?.includes("accessed:") &&
+          entry?.url?.includes("/onlyoffice/")
+        ) {
           const match = entry.message.match(
-            /File with id "(.*?)" deleted: "(.*?)"/
+            /File with id "(.*?)" accessed: "(.*?)"/
           );
           const fileId = match?.[1] || "Unknown";
           const fileName = match?.[2]?.trim() || "Unknown";
@@ -38,7 +41,7 @@ export async function GET(req) {
           if (filterType === "daily") {
             isIncluded = logDate.toDateString() === now.toDateString();
           } else if (filterType === "weekly") {
-            const oneWeekAgo = new Date();
+            const oneWeekAgo = new Date(now);
             oneWeekAgo.setDate(now.getDate() - 7);
             isIncluded = logDate >= oneWeekAgo;
           } else if (filterType === "monthly") {
@@ -50,12 +53,12 @@ export async function GET(req) {
           }
 
           if (isIncluded) {
-            logEntries.push({
+            onlyOfficeLogs.push({
               User: entry.user,
               FileName: fileName,
-              Method: entry.method,
+              FileID: fileId,
               URL: entry.url,
-              Message: `File "${fileName}" (ID: ${fileId}) telah dihapus oleh "${entry.user}"`,
+              Message: `File "${fileName}" (ID: ${fileId}) diakses via OnlyOffice oleh "${entry.user}"`,
               UserAgent: entry.userAgent,
               Time: entry.time,
             });
@@ -66,24 +69,20 @@ export async function GET(req) {
       }
     }
 
-    // Sort the entries by Time (descending)
-    logEntries.sort((a, b) => new Date(b.Time) - new Date(a.Time));
+    onlyOfficeLogs.sort((a, b) => new Date(b.Time) - new Date(a.Time));
 
-    // Create Excel workbook
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet("Deleted Files");
+    const worksheet = workbook.addWorksheet("OnlyOffice Access Logs");
 
-    // Set header columns
-    if (logEntries.length > 0) {
-      worksheet.columns = Object.keys(logEntries[0]).map((key) => ({
+    if (onlyOfficeLogs.length > 0) {
+      worksheet.columns = Object.keys(onlyOfficeLogs[0]).map((key) => ({
         header: key,
         key,
         width: 30,
       }));
     }
 
-    // Add rows
-    logEntries.forEach((entry) => {
+    onlyOfficeLogs.forEach((entry) => {
       worksheet.addRow(entry);
     });
 
@@ -94,11 +93,11 @@ export async function GET(req) {
       headers: {
         "Content-Type":
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": `attachment; filename="deleted-files-${filterType}-logs.xlsx"`,
+        "Content-Disposition": `attachment; filename="onlyoffice-${filterType}-logs.xlsx"`,
       },
     });
   } catch (err) {
-    console.error("Error while processing logs:", err);
+    console.error("Error processing OnlyOffice logs:", err);
     return new Response("Internal Server Error", { status: 500 });
   }
 }
