@@ -13,7 +13,7 @@ export default function AccessedFilesPage() {
     async function fetchAccessLogs() {
       setLoading(true);
       try {
-        const res = await fetch(`/api/onlyoffice-logs?filter=${filterType}`);
+        const res = await fetch(`/api/accessfile?filter=${filterType}`);
         const data = await res.json();
 
         if (res.ok) {
@@ -59,6 +59,17 @@ export default function AccessedFilesPage() {
             <option value="monthly">Bulanan</option>
             <option value="all">Semua</option>
           </select>
+          <button
+            onClick={() =>
+              window.open(
+                `/api/accessfile/export?filter=${filterType}`,
+                "_blank"
+              )
+            }
+            className="ml-3 bg-red-600 text-white px-3 py-1 rounded hover:bg-green-600 text-sm"
+          >
+            Download Excel
+          </button>
         </div>
       </div>
 
