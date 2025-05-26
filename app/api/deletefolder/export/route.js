@@ -1,18 +1,23 @@
 import fs from "fs";
 import readline from "readline";
 import ExcelJS from "exceljs";
+import { NextResponse } from "next/server";
 
 export async function GET(req) {
   try {
     const logPath = process.env.LOG_PATH;
 
     if (!logPath || !fs.existsSync(logPath)) {
-      return new Response("Log file not found", { status: 404 });
+      return new NextResponse(JSON.stringify({ error: "Log file not found" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     const { searchParams } = new URL(req.url);
     const filterType = searchParams.get("filter") || "all";
     const now = new Date();
+    const folderLogs = [];
 
     const fileStream = fs.createReadStream(logPath, { encoding: "utf8" });
     const rl = readline.createInterface({
@@ -20,21 +25,20 @@ export async function GET(req) {
       crlfDelay: Infinity,
     });
 
-    const folderLogs = [];
-
     for await (const line of rl) {
+      if (folderLogs.length >= 100) break;
+
       try {
         const entry = JSON.parse(line);
 
-        // Pastikan log adalah penghapusan folder
-        if (entry?.message?.includes("deleted:")) {
-          const match = entry.message.match(
-            /File with id "(.*?)" deleted: "(.*?)"/
-          );
-          const fileId = match?.[1] || "Unknown";
-          const fileName = match?.[2]?.trim();
+        const isDeleteMethod = entry.method === "DELETE";
+        const isDeleteMessage = entry.message?.includes("File with id");
+        const isFilesUrl = entry.url?.includes("/remote.php/dav/files/");
 
-          const isFolder = !fileName; // Jika nama file kosong, itu folder
+        if (isDeleteMethod && isDeleteMessage && isFilesUrl) {
+          const pathParts = entry.url.split("/");
+          const lastSegment = decodeURIComponent(pathParts.at(-1) || "");
+          const isFolder = !lastSegment.includes(".");
 
           if (isFolder) {
             const logDate = new Date(entry.time);
@@ -55,51 +59,63 @@ export async function GET(req) {
             }
 
             if (isIncluded) {
+              const match = entry.message.match(
+                /File with id "(.*?)" deleted: "(.*?)"/
+              );
+              const fileId = match?.[1] || "Unknown";
+
               folderLogs.push({
-                User: entry.user,
-                FolderPath: entry.url,
-                Method: entry.method,
-                Message: `Folder dengan ID "${fileId}" telah dihapus oleh "${entry.user}"`,
-                UserAgent: entry.userAgent,
-                Time: entry.time,
+                time: entry.time,
+                user: entry.user,
+                method: entry.method,
+                folderPath: decodeURIComponent(entry.url),
+                message: `Folder dengan ID "${fileId}" telah dihapus oleh "${entry.user}"`,
+                userAgent: entry.userAgent,
               });
             }
           }
         }
       } catch {
-        // Skip invalid line
+        // skip line
       }
     }
 
-    folderLogs.sort((a, b) => new Date(b.Time) - new Date(a.Time));
+    // Urutkan dari terbaru ke terlama
+    folderLogs.sort((a, b) => new Date(b.time) - new Date(a.time));
 
+    // Generate Excel
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Deleted Folders");
 
-    if (folderLogs.length > 0) {
-      worksheet.columns = Object.keys(folderLogs[0]).map((key) => ({
-        header: key,
-        key,
-        width: 30,
-      }));
-    }
+    worksheet.columns = [
+      { header: "Time", key: "time", width: 25 },
+      { header: "User", key: "user", width: 20 },
+      { header: "Method", key: "method", width: 10 },
+      { header: "Folder Path", key: "folderPath", width: 50 },
+      { header: "Message", key: "message", width: 60 },
+      { header: "User Agent", key: "userAgent", width: 50 },
+    ];
 
-    folderLogs.forEach((entry) => {
-      worksheet.addRow(entry);
-    });
+    worksheet.addRows(folderLogs);
 
     const buffer = await workbook.xlsx.writeBuffer();
 
-    return new Response(buffer, {
+    return new NextResponse(buffer, {
       status: 200,
       headers: {
         "Content-Type":
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": `attachment; filename="deleted-folder-${filterType}-logs.xlsx"`,
+        "Content-Disposition": `attachment; filename="log_folder_deleted_${filterType}.xlsx"`,
       },
     });
-  } catch (err) {
-    console.error("Error during folder log export:", err);
-    return new Response("Internal Server Error", { status: 500 });
+  } catch (error) {
+    console.error("Excel export error:", error);
+    return new NextResponse(
+      JSON.stringify({ error: "Internal Server Error" }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
   }
 }
