@@ -53,6 +53,13 @@ export default function Sidebar() {
         </Link>
 
         <Link
+          href="/page/sharelog"
+          className="flex items-center p-2 text-gray-700 hover:bg-gray-100 rounded"
+        >
+          <FcShare className="w-5 h-5 mr-2" /> ShareLog
+        </Link>
+
+        <Link
           href="/page/unshare"
           className="flex items-center p-2 text-gray-700 hover:bg-gray-100 rounded"
         >

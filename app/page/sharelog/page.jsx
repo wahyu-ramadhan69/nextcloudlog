@@ -13,7 +13,7 @@ export default function SharedFoldersPage() {
     async function fetchSharedLogs() {
       setLoading(true);
       try {
-        const res = await fetch(`/api/share?filter=${filterType}`);
+        const res = await fetch(`/api/sharelog?filter=${filterType}`);
         const data = await res.json();
 
         if (res.ok) {
