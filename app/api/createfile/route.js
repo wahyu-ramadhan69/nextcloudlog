@@ -29,7 +29,8 @@ export async function GET(req) {
           entry &&
           entry.message &&
           entry.message.includes("File with id") &&
-          entry.message.includes("created")
+          entry.message.includes("created") &&
+          entry.method !== "MKCOL"
         ) {
           const match = entry.message.match(
             /File with id "(.*?)" created: "(.*?)"/
