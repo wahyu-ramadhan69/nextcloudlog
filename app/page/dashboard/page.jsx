@@ -74,7 +74,7 @@ export default function Dashboard() {
             : "Error"
         );
 
-        const shareRes = await fetch("/api/share/count");
+        const shareRes = await fetch("/api/sharelog/count");
         const shareData = await shareRes.json();
         setShareCount(
           shareRes.ok && shareData?.totalSharedFiles !== undefined
