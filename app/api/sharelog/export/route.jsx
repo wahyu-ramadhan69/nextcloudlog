@@ -117,7 +117,7 @@ export async function GET(req) {
       headers: {
         "Content-Type":
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": `attachment; filename="share-${filterType}-logs.xlsx"`,
+        "Content-Disposition": `attachment; filename="share-log-${filterType}-logs.xlsx"`,
       },
     });
   } catch (err) {
