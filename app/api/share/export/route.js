@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { db } from "../../../../lib/db";
 import ExcelJS from "exceljs";
 
 export async function GET(req) {
