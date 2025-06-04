@@ -85,8 +85,7 @@ export default function SharedFoldersPage() {
                   <th className="py-3 px-6 text-left">Shared To</th>
                   <th className="py-3 px-6 text-left">Folder / Path</th>
                   <th className="py-3 px-6 text-left">Waktu</th>
-                  <th className="py-3 px-6 text-left">Permission</th>{" "}
-                  {/* Tambah kolom */}
+                  <th className="py-3 px-6 text-left">Permission</th>
                 </tr>
               </thead>
               <tbody className="text-gray-700 text-sm">
@@ -97,8 +96,7 @@ export default function SharedFoldersPage() {
                     <td className="py-3 px-6">{item.sharedTo}</td>
                     <td className="py-3 px-6">{item.message}</td>
                     <td className="py-3 px-6">{item.time}</td>
-                    <td className="py-3 px-6">{item.permission}</td>{" "}
-                    {/* Tampilkan */}
+                    <td className="py-3 px-6">{item.permission}</td>
                   </tr>
                 ))}
               </tbody>
