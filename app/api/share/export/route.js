@@ -1,6 +1,25 @@
 import { db } from "../../../../lib/db";
 import ExcelJS from "exceljs";
 
+const permissionMap = {
+  1: "Read",
+  3: "Read, Edit",
+  5: "Read, Create",
+  7: "Read, Create, Edit",
+  9: "Read, Delete",
+  11: "Read, Edit, Delete",
+  13: "Read, Create, Delete",
+  15: "Read, Create, Edit, Delete",
+  17: "Read, Share",
+  19: "Read, Edit, Share",
+  21: "Read, Create, Share",
+  23: "Read, Create, Edit, Share",
+  25: "Read, Share, Delete",
+  27: "Read, Edit, Share, Delete",
+  29: "Read, Create, Share, Delete",
+  31: "Read, Create, Edit, Share, Delete",
+};
+
 export async function GET(req) {
   const { searchParams } = new URL(req.url);
   const filter = searchParams.get("filter") || "all";
@@ -23,7 +42,8 @@ export async function GET(req) {
         ELSE 'Other'
       END AS shared_to,
       CONCAT('/', gf.mount_point, '/', SUBSTRING_INDEX(fc.path, '/', -1)) AS full_path,
-      FROM_UNIXTIME(s.stime) AS shared_at
+      FROM_UNIXTIME(s.stime) AS shared_at,
+      s.permissions
     FROM 
       oc_share s
     JOIN 
@@ -46,15 +66,21 @@ export async function GET(req) {
     worksheet.columns = [
       { header: "No", key: "no", width: 5 },
       { header: "User", key: "shared_by", width: 20 },
-      { header: "Shared To", key: "shared_to", width: 25 },
+      { header: "Shared To", key: "shared_to", width: 30 },
       { header: "Path", key: "full_path", width: 40 },
       { header: "Waktu Sharing", key: "shared_at", width: 25 },
+      { header: "Permission", key: "permission_text", width: 35 },
     ];
 
     rows.forEach((row, index) => {
       worksheet.addRow({
         no: index + 1,
-        ...row,
+        shared_by: row.shared_by,
+        shared_to: row.shared_to,
+        full_path: row.full_path,
+        shared_at: row.shared_at,
+        permission_text:
+          permissionMap[row.permissions] || `Unknown (${row.permissions})`,
       });
     });
 

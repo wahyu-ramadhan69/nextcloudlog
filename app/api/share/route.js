@@ -1,5 +1,24 @@
 import { db } from "../../../lib/db";
 
+const permissionMap = {
+  1: "Read",
+  3: "Read, Edit",
+  5: "Read, Create",
+  7: "Read, Create, Edit",
+  9: "Read, Delete",
+  11: "Read, Edit, Delete",
+  13: "Read, Create, Delete",
+  15: "Read, Create, Edit, Delete",
+  17: "Read, Share",
+  19: "Read, Edit, Share",
+  21: "Read, Create, Share",
+  23: "Read, Create, Edit, Share",
+  25: "Read, Share, Delete",
+  27: "Read, Edit, Share, Delete",
+  29: "Read, Create, Share, Delete",
+  31: "Read, Create, Edit, Share, Delete",
+};
+
 export async function GET(req) {
   const { searchParams } = new URL(req.url);
   const filter = searchParams.get("filter") || "all";
@@ -18,6 +37,7 @@ export async function GET(req) {
         s.uid_owner AS shared_by,
         CONCAT('/', gf.mount_point, '/', SUBSTRING_INDEX(fc.path, '/', -1)) AS full_path,
         FROM_UNIXTIME(s.stime) AS shared_at,
+        s.permissions,
         CASE s.share_type
             WHEN 0 THEN s.share_with
             WHEN 1 THEN CONCAT('Group: ', s.share_with)
@@ -39,7 +59,15 @@ export async function GET(req) {
 
   try {
     const [rows] = await db.query(query);
-    return Response.json(rows);
+
+    // Terjemahkan permissions
+    const translatedRows = rows.map((row) => ({
+      ...row,
+      permission_text:
+        permissionMap[row.permissions] || `Unknown (${row.permissions})`,
+    }));
+
+    return Response.json(translatedRows);
   } catch (err) {
     console.error("Query error:", err);
     return new Response(JSON.stringify({ error: "Internal Server Error" }), {
