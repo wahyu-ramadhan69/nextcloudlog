@@ -14,6 +14,7 @@ export async function GET(req) {
 
     const now = new Date();
     const logEntries = [];
+    const MAX_LINES = 5000;
 
     const fileStream = fs.createReadStream(logPath, { encoding: "utf8" });
     const rl = readline.createInterface({
@@ -21,7 +22,12 @@ export async function GET(req) {
       crlfDelay: Infinity,
     });
 
+    let lineCount = 0;
+
     for await (const line of rl) {
+      if (lineCount >= MAX_LINES) break;
+      lineCount++;
+
       try {
         const entry = JSON.parse(line);
 
@@ -66,11 +72,11 @@ export async function GET(req) {
           }
         }
       } catch {
-        // skip line if JSON.parse fails
+        // Abaikan baris yang tidak bisa diparse
       }
     }
 
-    // Sort descending by time (terbaru dulu)
+    // Urutkan dari terbaru ke terlama
     logEntries.sort((a, b) => new Date(b.time) - new Date(a.time));
 
     // Ambil maksimal 50 entri

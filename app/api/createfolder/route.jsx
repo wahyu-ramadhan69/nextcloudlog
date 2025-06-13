@@ -14,6 +14,7 @@ export async function GET(req) {
 
     const now = new Date();
     const logEntries = [];
+    const MAX_LINES = 5000;
 
     const fileStream = fs.createReadStream(logPath, { encoding: "utf8" });
     const rl = readline.createInterface({
@@ -21,11 +22,14 @@ export async function GET(req) {
       crlfDelay: Infinity,
     });
 
+    let lineCount = 0;
     for await (const line of rl) {
+      if (lineCount >= MAX_LINES) break;
+      lineCount++;
+
       try {
         const entry = JSON.parse(line);
 
-        // Cek apakah entry log termasuk folder creation (MKCOL)
         if (
           entry &&
           entry.message &&
@@ -39,7 +43,6 @@ export async function GET(req) {
           const folderName = match ? match[2] : "Unknown";
           const logDate = new Date(entry.time);
 
-          // Filter berdasarkan waktu
           let isIncluded = false;
           if (filterType === "daily") {
             isIncluded = logDate.toDateString() === now.toDateString();
@@ -67,14 +70,12 @@ export async function GET(req) {
           }
         }
       } catch {
-        // abaikan baris yang tidak bisa diparse
+        // Abaikan baris yang tidak bisa di-parse
       }
     }
 
-    // Urutkan berdasarkan waktu terbaru
     logEntries.sort((a, b) => new Date(b.time) - new Date(a.time));
 
-    // Ambil maksimal 50 entri
     const limitedEntries = logEntries.slice(0, 50);
 
     return Response.json(limitedEntries, { status: 200 });

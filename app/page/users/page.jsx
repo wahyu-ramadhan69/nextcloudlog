@@ -19,7 +19,7 @@ export default function UsersPage() {
           const formattedUsers = data.online_users.map((username, index) => ({
             id: index + 1,
             name: username,
-            email: `${username}@example.com`, // optional placeholder email
+            email: `${username}@bcaf.co.id`,
           }));
           setUsers(formattedUsers);
         } else {

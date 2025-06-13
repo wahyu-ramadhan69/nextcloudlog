@@ -68,22 +68,26 @@ export async function GET(req) {
           }
         }
       } catch {
-        // skip
+        // abaikan baris tidak valid
       }
     }
 
+    // Urutkan dari terbaru ke terlama
     logEntries.sort((a, b) => new Date(b.Time) - new Date(a.Time));
+
+    // Batasi hanya 5000 entri terbaru yang akan diekspor
+    const exportEntries = logEntries.slice(0, 5000);
 
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Files Created");
 
-    worksheet.columns = Object.keys(logEntries[0] || {}).map((key) => ({
+    worksheet.columns = Object.keys(exportEntries[0] || {}).map((key) => ({
       header: key,
       key: key,
       width: 30,
     }));
 
-    logEntries.forEach((entry) => {
+    exportEntries.forEach((entry) => {
       worksheet.addRow(entry);
     });
 
