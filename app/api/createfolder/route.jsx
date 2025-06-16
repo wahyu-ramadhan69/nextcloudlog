@@ -10,11 +10,11 @@ export async function GET(req) {
     }
 
     const { searchParams } = new URL(req.url);
-    const filterType = searchParams.get("filter") || "daily"; // daily, weekly, monthly, all
+    const filterType = searchParams.get("filter") || "daily";
 
     const now = new Date();
     const logEntries = [];
-    const MAX_LINES = 5000;
+    const MAX_LINES = 1000;
 
     const fileStream = fs.createReadStream(logPath, { encoding: "utf8" });
     const rl = readline.createInterface({

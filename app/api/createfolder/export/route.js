@@ -69,7 +69,7 @@ export async function GET(req) {
     // Urutkan dari terbaru ke terlama dan batasi 5000 log
     logEntries = logEntries
       .sort((a, b) => new Date(b.Time) - new Date(a.Time))
-      .slice(0, 5000);
+      .slice(0, 1000);
 
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Folder Created");

@@ -76,7 +76,7 @@ export async function GET(req) {
     logEntries.sort((a, b) => new Date(b.Time) - new Date(a.Time));
 
     // Batasi hanya 5000 entri terbaru yang akan diekspor
-    const exportEntries = logEntries.slice(0, 5000);
+    const exportEntries = logEntries.slice(0, 1000);
 
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Files Created");
