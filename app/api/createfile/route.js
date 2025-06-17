@@ -6,15 +6,15 @@ export async function GET(req) {
     const logPath = process.env.LOG_PATH;
 
     if (!logPath || !fs.existsSync(logPath)) {
-      return Response.json({ error: "Log file not found" }, { status: 404 });
+      return new Response(JSON.stringify({ error: "Log file not found" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     const { searchParams } = new URL(req.url);
-    const filterType = searchParams.get("filter") || "daily";
-
+    const filterTime = searchParams.get("filter") || "all";
     const now = new Date();
-    const logEntries = [];
-    const MAX_LINES = 1000;
 
     const fileStream = fs.createReadStream(logPath, { encoding: "utf8" });
     const rl = readline.createInterface({
@@ -22,69 +22,72 @@ export async function GET(req) {
       crlfDelay: Infinity,
     });
 
-    let lineCount = 0;
+    const uploadLogs = [];
 
     for await (const line of rl) {
-      if (lineCount >= MAX_LINES) break;
-      lineCount++;
+      if (uploadLogs.length >= 100) break;
 
       try {
         const entry = JSON.parse(line);
 
-        if (
-          entry &&
-          entry.message &&
-          entry.message.includes("File with id") &&
-          entry.message.includes("created") &&
-          entry.method !== "MKCOL"
-        ) {
-          const match = entry.message.match(
-            /File with id "(.*?)" created: "(.*?)"/
-          );
-          const folderName = match ? match[2] : "Unknown";
+        const isUpload =
+          entry?.method === "PUT" &&
+          entry?.message?.includes("created:") &&
+          entry?.url?.includes("/remote.php/dav/files/");
 
-          const logDate = new Date(entry.time);
-          let isIncluded = false;
+        if (!isUpload) continue;
 
-          if (filterType === "daily") {
-            isIncluded = logDate.toDateString() === now.toDateString();
-          } else if (filterType === "weekly") {
-            const oneWeekAgo = new Date();
-            oneWeekAgo.setDate(now.getDate() - 7);
-            isIncluded = logDate >= oneWeekAgo;
-          } else if (filterType === "monthly") {
-            isIncluded =
-              logDate.getMonth() === now.getMonth() &&
-              logDate.getFullYear() === now.getFullYear();
-          } else {
-            isIncluded = true;
-          }
+        const logDate = new Date(entry.time);
 
-          if (isIncluded) {
-            logEntries.push({
-              user: entry.user,
-              method: entry.method,
-              url: entry.url,
-              message: `File dengan nama "${folderName}" telah dibuat/diupload oleh "${entry.user}"`,
-              userAgent: entry.userAgent,
-              time: entry.time,
-            });
-          }
+        let isIncluded = false;
+        if (filterTime === "daily") {
+          isIncluded = logDate.toDateString() === now.toDateString();
+        } else if (filterTime === "weekly") {
+          const oneWeekAgo = new Date(now);
+          oneWeekAgo.setDate(now.getDate() - 7);
+          isIncluded = logDate >= oneWeekAgo;
+        } else if (filterTime === "monthly") {
+          isIncluded =
+            logDate.getMonth() === now.getMonth() &&
+            logDate.getFullYear() === now.getFullYear();
+        } else {
+          isIncluded = true; // default: tampilkan semua
         }
+
+        if (!isIncluded) continue;
+
+        const match = entry.message.match(
+          /File with id "(.*?)" created: "(.*?)"/
+        );
+        const fileId = match?.[1] || "Unknown";
+        const fileName = match?.[2]?.trim() || "Unknown";
+
+        uploadLogs.push({
+          user: entry.user,
+          fileId,
+          fileName,
+          url: entry.url,
+          message: `File "${fileName}" (ID: ${fileId}) di-*upload* oleh "${entry.user}"`,
+          userAgent: entry.userAgent,
+          time: entry.time,
+        });
       } catch {
-        // Abaikan baris yang tidak bisa diparse
+        // skip jika JSON.parse error
+        continue;
       }
     }
 
-    // Urutkan dari terbaru ke terlama
-    logEntries.sort((a, b) => new Date(b.time) - new Date(a.time));
+    uploadLogs.sort((a, b) => new Date(b.time) - new Date(a.time));
 
-    // Ambil maksimal 50 entri
-    const limitedEntries = logEntries.slice(0, 50);
-
-    return Response.json(limitedEntries, { status: 200 });
-  } catch (error) {
-    console.error("Error reading log:", error);
-    return Response.json({ error: error.message }, { status: 500 });
+    return new Response(JSON.stringify(uploadLogs.slice(0, 100)), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (err) {
+    console.error("Error processing upload logs:", err);
+    return new Response(JSON.stringify({ error: "Internal Server Error" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 }
