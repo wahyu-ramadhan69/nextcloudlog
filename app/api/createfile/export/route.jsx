@@ -11,10 +11,8 @@ export async function GET(req) {
     }
 
     const { searchParams } = new URL(req.url);
-    const filterType = searchParams.get("filter") || "daily";
-
+    const filterType = searchParams.get("filter") || "all";
     const now = new Date();
-    const logEntries = [];
 
     const fileStream = fs.createReadStream(logPath, { encoding: "utf8" });
     const rl = readline.createInterface({
@@ -22,72 +20,74 @@ export async function GET(req) {
       crlfDelay: Infinity,
     });
 
+    const uploadLogs = [];
+
     for await (const line of rl) {
+      if (uploadLogs.length >= 1000) break;
+
       try {
         const entry = JSON.parse(line);
 
-        if (
-          entry &&
-          entry.message &&
-          entry.message.includes("File with id") &&
-          entry.message.includes("created") &&
-          entry.method !== "MKCOL"
-        ) {
-          const match = entry.message.match(
-            /File with id "(.*?)" created: "(.*?)"/
-          );
-          const fileName = match?.[2] || "Unknown";
+        const isUpload =
+          entry?.method === "PUT" &&
+          entry?.message?.includes("created:") &&
+          entry?.url?.includes("/remote.php/dav/files/");
 
-          const logTime = new Date(entry.time);
-          let isIncluded = false;
+        if (!isUpload) continue;
 
-          if (filterType === "daily") {
-            isIncluded = logTime.toDateString() === now.toDateString();
-          } else if (filterType === "weekly") {
-            const lastWeek = new Date(now);
-            lastWeek.setDate(now.getDate() - 7);
-            isIncluded = logTime >= lastWeek;
-          } else if (filterType === "monthly") {
-            isIncluded =
-              logTime.getMonth() === now.getMonth() &&
-              logTime.getFullYear() === now.getFullYear();
-          } else {
-            isIncluded = true;
-          }
+        const logDate = new Date(entry.time);
 
-          if (isIncluded) {
-            logEntries.push({
-              User: entry.user,
-              FileName: fileName,
-              Method: entry.method,
-              URL: entry.url,
-              Message: `File dengan nama "${fileName}" telah diupload/dibuat oleh "${entry.user}"`,
-              UserAgent: entry.userAgent,
-              Time: entry.time,
-            });
-          }
+        let isIncluded = false;
+        if (filterType === "daily") {
+          isIncluded = logDate.toDateString() === now.toDateString();
+        } else if (filterType === "weekly") {
+          const oneWeekAgo = new Date(now);
+          oneWeekAgo.setDate(now.getDate() - 7);
+          isIncluded = logDate >= oneWeekAgo;
+        } else if (filterType === "monthly") {
+          isIncluded =
+            logDate.getMonth() === now.getMonth() &&
+            logDate.getFullYear() === now.getFullYear();
+        } else {
+          isIncluded = true;
         }
+
+        if (!isIncluded) continue;
+
+        const match = entry.message.match(
+          /File with id "(.*?)" created: "(.*?)"/
+        );
+        const fileId = match?.[1] || "Unknown";
+        const fileName = match?.[2]?.trim() || "Unknown";
+
+        uploadLogs.push({
+          User: entry.user,
+          FileName: fileName,
+          FileID: fileId,
+          URL: entry.url,
+          Message: `File "${fileName}" (ID: ${fileId}) di-*upload* oleh "${entry.user}"`,
+          UserAgent: entry.userAgent,
+          Time: entry.time,
+        });
       } catch {
-        // abaikan baris tidak valid
+        // Skip invalid lines
       }
     }
 
-    // Urutkan dari terbaru ke terlama
-    logEntries.sort((a, b) => new Date(b.Time) - new Date(a.Time));
-
-    // Batasi hanya 5000 entri terbaru yang akan diekspor
-    const exportEntries = logEntries.slice(0, 1000);
+    uploadLogs.sort((a, b) => new Date(b.Time) - new Date(a.Time));
 
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet("Files Created");
+    const worksheet = workbook.addWorksheet("Upload Logs");
 
-    worksheet.columns = Object.keys(exportEntries[0] || {}).map((key) => ({
-      header: key,
-      key: key,
-      width: 30,
-    }));
+    if (uploadLogs.length > 0) {
+      worksheet.columns = Object.keys(uploadLogs[0]).map((key) => ({
+        header: key,
+        key,
+        width: 30,
+      }));
+    }
 
-    exportEntries.forEach((entry) => {
+    uploadLogs.forEach((entry) => {
       worksheet.addRow(entry);
     });
 
@@ -98,10 +98,11 @@ export async function GET(req) {
       headers: {
         "Content-Type":
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": `attachment; filename="created-files-${filterType}-logs.xlsx"`,
+        "Content-Disposition": `attachment; filename="upload-${filterType}-logs.xlsx"`,
       },
     });
   } catch (err) {
+    console.error("Error exporting upload logs:", err);
     return new Response("Internal Server Error", { status: 500 });
   }
 }
