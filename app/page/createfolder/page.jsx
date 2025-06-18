@@ -96,7 +96,7 @@ export default function FolderCreatedPage() {
                     <td className="py-3 px-6">{item.id}</td>
                     <td className="py-3 px-6">{item.user}</td>
                     <td className="py-3 px-6">{item.message}</td>
-                    <td className="py-3 px-6">{item.url}</td>
+                    <td className="py-3 px-6">{item.path}</td>
                     <td className="py-3 px-6">{item.time}</td>
                   </tr>
                 ))}
