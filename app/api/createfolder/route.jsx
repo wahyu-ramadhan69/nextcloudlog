@@ -4,17 +4,16 @@ import readline from "readline";
 export async function GET(req) {
   try {
     const logPath = process.env.LOG_PATH;
-
     if (!logPath || !fs.existsSync(logPath)) {
-      return Response.json({ error: "Log file not found" }, { status: 404 });
+      return new Response(JSON.stringify({ error: "Log file not found" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     const { searchParams } = new URL(req.url);
-    const filterType = searchParams.get("filter") || "daily";
-
+    const filter = searchParams.get("filter") || "all";
     const now = new Date();
-    const logEntries = [];
-    const MAX_LINES = 1000;
 
     const fileStream = fs.createReadStream(logPath, { encoding: "utf8" });
     const rl = readline.createInterface({
@@ -22,65 +21,71 @@ export async function GET(req) {
       crlfDelay: Infinity,
     });
 
-    let lineCount = 0;
+    const folderLogs = [];
+
     for await (const line of rl) {
-      if (lineCount >= MAX_LINES) break;
-      lineCount++;
+      if (folderLogs.length >= 1000) break;
 
       try {
         const entry = JSON.parse(line);
 
-        if (
-          entry &&
-          entry.message &&
-          entry.message.includes("File with id") &&
-          entry.message.includes("created") &&
-          entry.method === "MKCOL"
-        ) {
-          const match = entry.message.match(
-            /File with id "(.*?)" created: "(.*?)"/
-          );
-          const folderName = match ? match[2] : "Unknown";
-          const logDate = new Date(entry.time);
+        const isFolderCreation =
+          entry?.method === "MKCOL" &&
+          entry?.message?.includes("written to:") &&
+          entry?.url?.includes("/remote.php/dav/files/");
 
-          let isIncluded = false;
-          if (filterType === "daily") {
-            isIncluded = logDate.toDateString() === now.toDateString();
-          } else if (filterType === "weekly") {
-            const oneWeekAgo = new Date();
-            oneWeekAgo.setDate(now.getDate() - 7);
-            isIncluded = logDate >= oneWeekAgo;
-          } else if (filterType === "monthly") {
-            isIncluded =
-              logDate.getMonth() === now.getMonth() &&
-              logDate.getFullYear() === now.getFullYear();
-          } else {
-            isIncluded = true;
-          }
+        if (!isFolderCreation) continue;
 
-          if (isIncluded) {
-            logEntries.push({
-              user: entry.user,
-              method: entry.method,
-              url: entry.url,
-              message: `Folder dengan nama "${folderName}" telah dibuat oleh "${entry.user}"`,
-              userAgent: entry.userAgent,
-              time: entry.time,
-            });
-          }
+        const logDate = new Date(entry.time);
+        let isIncluded = false;
+
+        if (filter === "daily") {
+          isIncluded = logDate.toDateString() === now.toDateString();
+        } else if (filter === "weekly") {
+          const oneWeekAgo = new Date(now);
+          oneWeekAgo.setDate(now.getDate() - 7);
+          isIncluded = logDate >= oneWeekAgo;
+        } else if (filter === "monthly") {
+          isIncluded =
+            logDate.getMonth() === now.getMonth() &&
+            logDate.getFullYear() === now.getFullYear();
+        } else {
+          isIncluded = true;
         }
+
+        if (!isIncluded) continue;
+
+        const match = entry.message.match(
+          /File with id "(.*?)" written to: "(.*?)"/
+        );
+        const folderId = match?.[1] || "Unknown";
+        const folderPath = match?.[2] || "Unknown";
+
+        folderLogs.push({
+          User: entry.user,
+          FolderID: folderId,
+          FolderPath: folderPath,
+          URL: entry.url,
+          Message: `Folder "${folderPath}" (ID: ${folderId}) dibuat oleh "${entry.user}"`,
+          UserAgent: entry.userAgent,
+          Time: entry.time,
+        });
       } catch {
-        // Abaikan baris yang tidak bisa di-parse
+        // skip broken line
       }
     }
 
-    logEntries.sort((a, b) => new Date(b.time) - new Date(a.time));
+    folderLogs.sort((a, b) => new Date(b.Time) - new Date(a.Time));
 
-    const limitedEntries = logEntries.slice(0, 50);
-
-    return Response.json(limitedEntries, { status: 200 });
-  } catch (error) {
-    console.error("Error reading log file:", error);
-    return Response.json({ error: error.message }, { status: 500 });
+    return new Response(JSON.stringify(folderLogs.slice(0, 1000)), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (err) {
+    console.error("Error reading folder logs:", err);
+    return new Response(JSON.stringify({ error: "Internal Server Error" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 }

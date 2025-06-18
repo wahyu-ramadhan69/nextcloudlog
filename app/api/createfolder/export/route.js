@@ -1,86 +1,92 @@
 import fs from "fs";
+import readline from "readline";
 import ExcelJS from "exceljs";
 
 export async function GET(req) {
   try {
     const logPath = process.env.LOG_PATH;
-
     if (!logPath || !fs.existsSync(logPath)) {
       return new Response("Log file not found", { status: 404 });
     }
 
     const { searchParams } = new URL(req.url);
-    const filterType = searchParams.get("filter") || "daily";
-
-    const logs = fs.readFileSync(logPath, "utf8").split("\n").filter(Boolean);
-
-    let logEntries = logs
-      .map((line) => {
-        try {
-          return JSON.parse(line);
-        } catch {
-          return null;
-        }
-      })
-      .filter(
-        (entry) =>
-          entry &&
-          entry.message &&
-          entry.message.includes("File with id") &&
-          entry.message.includes("created") &&
-          entry.method === "MKCOL"
-      )
-      .map((entry) => {
-        const match = entry.message.match(
-          /File with id "(.*?)" created: "(.*?)"/
-        );
-        const folderName = match?.[2] || "Unknown";
-
-        return {
-          User: entry.user,
-          FolderName: folderName,
-          Method: entry.method,
-          URL: entry.url,
-          Message: `Folder dengan nama "${folderName}" telah dibuat oleh "${entry.user}"`,
-          UserAgent: entry.userAgent,
-          Time: entry.time,
-        };
-      });
-
+    const filter = searchParams.get("filter") || "all";
     const now = new Date();
-    logEntries = logEntries.filter((log) => {
-      const date = new Date(log.Time);
-      if (filterType === "daily")
-        return date.toDateString() === now.toDateString();
-      if (filterType === "weekly") {
-        const lastWeek = new Date(now);
-        lastWeek.setDate(now.getDate() - 7);
-        return date >= lastWeek;
-      }
-      if (filterType === "monthly") {
-        return (
-          date.getMonth() === now.getMonth() &&
-          date.getFullYear() === now.getFullYear()
-        );
-      }
-      return true;
+
+    const fileStream = fs.createReadStream(logPath, { encoding: "utf8" });
+    const rl = readline.createInterface({
+      input: fileStream,
+      crlfDelay: Infinity,
     });
 
-    // Urutkan dari terbaru ke terlama dan batasi 5000 log
-    logEntries = logEntries
-      .sort((a, b) => new Date(b.Time) - new Date(a.Time))
-      .slice(0, 1000);
+    const folderLogs = [];
+
+    for await (const line of rl) {
+      if (folderLogs.length >= 1000) break;
+
+      try {
+        const entry = JSON.parse(line);
+
+        const isFolderCreation =
+          entry?.method === "MKCOL" &&
+          entry?.message?.includes("written to:") &&
+          entry?.url?.includes("/remote.php/dav/files/");
+
+        if (!isFolderCreation) continue;
+
+        const logDate = new Date(entry.time);
+        let isIncluded = false;
+
+        if (filter === "daily") {
+          isIncluded = logDate.toDateString() === now.toDateString();
+        } else if (filter === "weekly") {
+          const oneWeekAgo = new Date(now);
+          oneWeekAgo.setDate(now.getDate() - 7);
+          isIncluded = logDate >= oneWeekAgo;
+        } else if (filter === "monthly") {
+          isIncluded =
+            logDate.getMonth() === now.getMonth() &&
+            logDate.getFullYear() === now.getFullYear();
+        } else {
+          isIncluded = true;
+        }
+
+        if (!isIncluded) continue;
+
+        const match = entry.message.match(
+          /File with id "(.*?)" written to: "(.*?)"/
+        );
+        const folderId = match?.[1] || "Unknown";
+        const folderPath = match?.[2] || "Unknown";
+
+        folderLogs.push({
+          User: entry.user,
+          FolderID: folderId,
+          FolderPath: folderPath,
+          URL: entry.url,
+          Message: `Folder "${folderPath}" (ID: ${folderId}) dibuat oleh "${entry.user}"`,
+          UserAgent: entry.userAgent,
+          Time: entry.time,
+        });
+      } catch {
+        // skip
+      }
+    }
+
+    folderLogs.sort((a, b) => new Date(b.Time) - new Date(a.Time));
 
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet("Folder Created");
+    const worksheet = workbook.addWorksheet("Folder Creation Logs");
 
-    worksheet.columns = Object.keys(logEntries[0] || {}).map((key) => ({
-      header: key,
-      key: key,
-      width: 30,
-    }));
+    if (folderLogs.length > 0) {
+      worksheet.columns = Object.keys(folderLogs[0]).map((key) => ({
+        header: key,
+        key,
+        width: 30,
+      }));
+    }
 
-    logEntries.forEach((entry) => {
+    folderLogs.forEach((entry) => {
       worksheet.addRow(entry);
     });
 
@@ -91,10 +97,11 @@ export async function GET(req) {
       headers: {
         "Content-Type":
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": `attachment; filename="created-folders-${filterType}-logs.xlsx"`,
+        "Content-Disposition": `attachment; filename="folder-create-${filter}-logs.xlsx"`,
       },
     });
   } catch (err) {
+    console.error("Error exporting folder logs:", err);
     return new Response("Internal Server Error", { status: 500 });
   }
 }
