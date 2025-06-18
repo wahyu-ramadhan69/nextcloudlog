@@ -19,9 +19,11 @@ export default function FolderCreatedPage() {
         if (res.ok) {
           const formattedFolders = data.map((entry, index) => ({
             id: index + 1,
-            user: entry.user || "Unknown",
-            message: entry.message || "-",
-            time: entry.time || "-",
+            user: entry.User || "Unknown",
+            message: entry.Message || "-",
+            time: entry.Time || "-",
+            url: entry.URL || "-",
+            path: entry.FolderPath || "-",
           }));
 
           setFolders(formattedFolders);
@@ -84,6 +86,7 @@ export default function FolderCreatedPage() {
                   <th className="py-3 px-6 text-left">ID</th>
                   <th className="py-3 px-6 text-left">User</th>
                   <th className="py-3 px-6 text-left">Message</th>
+                  <th className="py-3 px-6 text-left">Path</th>
                   <th className="py-3 px-6 text-left">Waktu</th>
                 </tr>
               </thead>
@@ -93,6 +96,7 @@ export default function FolderCreatedPage() {
                     <td className="py-3 px-6">{item.id}</td>
                     <td className="py-3 px-6">{item.user}</td>
                     <td className="py-3 px-6">{item.message}</td>
+                    <td className="py-3 px-6">{item.path}</td>
                     <td className="py-3 px-6">{item.time}</td>
                   </tr>
                 ))}
