@@ -1,5 +1,5 @@
 import fs from "fs";
-import readline from "readline";
+import readLastLines from "read-last-lines";
 import ExcelJS from "exceljs";
 
 export async function GET(req) {
@@ -13,15 +13,15 @@ export async function GET(req) {
     const filter = searchParams.get("filter") || "all";
     const now = new Date();
 
-    const fileStream = fs.createReadStream(logPath, { encoding: "utf8" });
-    const rl = readline.createInterface({
-      input: fileStream,
-      crlfDelay: Infinity,
-    });
+    // Ambil 5000 baris terakhir dan balik urutannya
+    const lines = (await readLastLines.read(logPath, 10000))
+      .split("\n")
+      .reverse()
+      .filter((line) => line.trim() !== "");
 
     const folderLogs = [];
 
-    for await (const line of rl) {
+    for (const line of lines) {
       if (folderLogs.length >= 1000) break;
 
       try {
@@ -53,28 +53,31 @@ export async function GET(req) {
 
         if (!isIncluded) continue;
 
-        const match = entry.message.match(
-          /File with id "(.*?)" written to: "(.*?)"/
-        );
+        const match = entry.message.match(/File with id "(.*?)" written to:/);
         const folderId = match?.[1] || "Unknown";
-        const folderPath = match?.[2] || "Unknown";
+
+        const urlMatch = entry.url.match(
+          /\/remote\.php\/dav\/files\/[^/]+\/(.*)/
+        );
+        const folderPath = urlMatch
+          ? decodeURIComponent(urlMatch[1])
+          : "Unknown";
 
         folderLogs.push({
+          ID: folderLogs.length + 1,
           User: entry.user,
           FolderID: folderId,
-          FolderPath: folderPath,
-          URL: entry.url,
           Message: `Folder "${folderPath}" (ID: ${folderId}) dibuat oleh "${entry.user}"`,
-          UserAgent: entry.userAgent,
-          Time: entry.time,
+          Path: folderPath,
+          Waktu: entry.time,
         });
       } catch {
-        // skip
+        // skip broken JSON line
+        continue;
       }
     }
 
-    folderLogs.sort((a, b) => new Date(b.Time) - new Date(a.Time));
-
+    // Siapkan workbook Excel
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Folder Creation Logs");
 

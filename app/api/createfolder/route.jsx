@@ -1,30 +1,27 @@
 import fs from "fs";
-import readline from "readline";
+import readLastLines from "read-last-lines";
 
 export async function GET(req) {
   try {
     const logPath = process.env.LOG_PATH;
     if (!logPath || !fs.existsSync(logPath)) {
-      return new Response(JSON.stringify({ error: "Log file not found" }), {
-        status: 404,
-        headers: { "Content-Type": "application/json" },
-      });
+      return new Response("Log file not found", { status: 404 });
     }
 
     const { searchParams } = new URL(req.url);
     const filter = searchParams.get("filter") || "all";
     const now = new Date();
 
-    const fileStream = fs.createReadStream(logPath, { encoding: "utf8" });
-    const rl = readline.createInterface({
-      input: fileStream,
-      crlfDelay: Infinity,
-    });
+    // Ambil 5000 baris terakhir (jaga-jaga sebagian tidak valid)
+    const lines = (await readLastLines.read(logPath, 10000))
+      .split("\n")
+      .reverse()
+      .filter((line) => line.trim() !== "");
 
     const folderLogs = [];
 
-    for await (const line of rl) {
-      if (folderLogs.length >= 100) break;
+    for (const line of lines) {
+      if (folderLogs.length >= 1000) break;
 
       try {
         const entry = JSON.parse(line);
@@ -55,37 +52,35 @@ export async function GET(req) {
 
         if (!isIncluded) continue;
 
-        const match = entry.message.match(
-          /File with id "(.*?)" written to: "(.*?)"/
-        );
+        const match = entry.message.match(/File with id "(.*?)" written to:/);
         const folderId = match?.[1] || "Unknown";
-        const folderPath = match?.[2] || "Unknown";
+
+        const urlMatch = entry.url.match(
+          /\/remote\.php\/dav\/files\/[^/]+\/(.*)/
+        );
+        const folderPath = urlMatch
+          ? decodeURIComponent(urlMatch[1])
+          : "Unknown";
 
         folderLogs.push({
+          ID: folderLogs.length + 1,
           User: entry.user,
           FolderID: folderId,
-          FolderPath: folderPath,
-          URL: entry.url,
           Message: `Folder "${folderPath}" (ID: ${folderId}) dibuat oleh "${entry.user}"`,
-          UserAgent: entry.userAgent,
-          Time: entry.time,
+          Path: folderPath,
+          Waktu: entry.time,
         });
       } catch {
-        // skip broken line
+        continue;
       }
     }
 
-    folderLogs.sort((a, b) => new Date(b.Time) - new Date(a.Time));
-
-    return new Response(JSON.stringify(folderLogs.slice(0, 1000)), {
+    return new Response(JSON.stringify(folderLogs), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
   } catch (err) {
-    console.error("Error reading folder logs:", err);
-    return new Response(JSON.stringify({ error: "Internal Server Error" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    console.error("Error reading tail logs:", err);
+    return new Response("Internal Server Error", { status: 500 });
   }
 }
