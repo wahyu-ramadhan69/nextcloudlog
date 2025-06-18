@@ -1,10 +1,11 @@
 import fs from "fs";
-import readLastLines from "read-last-lines";
+import readline from "readline";
 import ExcelJS from "exceljs";
 
 export async function GET(req) {
   try {
     const logPath = process.env.LOG_PATH;
+
     if (!logPath || !fs.existsSync(logPath)) {
       return new Response("Log file not found", { status: 404 });
     }
@@ -13,15 +14,15 @@ export async function GET(req) {
     const filter = searchParams.get("filter") || "all";
     const now = new Date();
 
-    // Ambil 5000 baris terakhir dan balik urutannya
-    const lines = (await readLastLines.read(logPath, 10000))
-      .split("\n")
-      .reverse()
-      .filter((line) => line.trim() !== "");
+    const fileStream = fs.createReadStream(logPath, { encoding: "utf8" });
+    const rl = readline.createInterface({
+      input: fileStream,
+      crlfDelay: Infinity,
+    });
 
     const folderLogs = [];
 
-    for (const line of lines) {
+    for await (const line of rl) {
       if (folderLogs.length >= 1000) break;
 
       try {
@@ -56,6 +57,7 @@ export async function GET(req) {
         const match = entry.message.match(/File with id "(.*?)" written to:/);
         const folderId = match?.[1] || "Unknown";
 
+        // 🔍 Ambil dan decode path dari URL
         const urlMatch = entry.url.match(
           /\/remote\.php\/dav\/files\/[^/]+\/(.*)/
         );
@@ -72,12 +74,12 @@ export async function GET(req) {
           Waktu: entry.time,
         });
       } catch {
-        // skip broken JSON line
-        continue;
+        // skip error
       }
     }
 
-    // Siapkan workbook Excel
+    folderLogs.sort((a, b) => new Date(b.Waktu) - new Date(a.Waktu));
+
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Folder Creation Logs");
 

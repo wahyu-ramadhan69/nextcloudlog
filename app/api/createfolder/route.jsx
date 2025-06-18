@@ -1,26 +1,29 @@
 import fs from "fs";
-import readLastLines from "read-last-lines";
+import readline from "readline";
 
 export async function GET(req) {
   try {
     const logPath = process.env.LOG_PATH;
     if (!logPath || !fs.existsSync(logPath)) {
-      return new Response("Log file not found", { status: 404 });
+      return new Response(JSON.stringify({ error: "Log file not found" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     const { searchParams } = new URL(req.url);
     const filter = searchParams.get("filter") || "all";
     const now = new Date();
 
-    // Ambil 5000 baris terakhir (jaga-jaga sebagian tidak valid)
-    const lines = (await readLastLines.read(logPath, 10000))
-      .split("\n")
-      .reverse()
-      .filter((line) => line.trim() !== "");
+    const fileStream = fs.createReadStream(logPath, { encoding: "utf8" });
+    const rl = readline.createInterface({
+      input: fileStream,
+      crlfDelay: Infinity,
+    });
 
     const folderLogs = [];
 
-    for (const line of lines) {
+    for await (const line of rl) {
       if (folderLogs.length >= 1000) break;
 
       try {
@@ -55,6 +58,7 @@ export async function GET(req) {
         const match = entry.message.match(/File with id "(.*?)" written to:/);
         const folderId = match?.[1] || "Unknown";
 
+        // 🔍 Ambil full path dari URL setelah nama user
         const urlMatch = entry.url.match(
           /\/remote\.php\/dav\/files\/[^/]+\/(.*)/
         );
@@ -71,16 +75,21 @@ export async function GET(req) {
           Waktu: entry.time,
         });
       } catch {
-        continue;
+        // Skip invalid JSON
       }
     }
 
-    return new Response(JSON.stringify(folderLogs), {
+    folderLogs.sort((a, b) => new Date(b.Waktu) - new Date(a.Waktu));
+
+    return new Response(JSON.stringify(folderLogs.slice(0, 1000)), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
   } catch (err) {
-    console.error("Error reading tail logs:", err);
-    return new Response("Internal Server Error", { status: 500 });
+    console.error("Error reading folder creation logs:", err);
+    return new Response(JSON.stringify({ error: "Internal Server Error" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 }
