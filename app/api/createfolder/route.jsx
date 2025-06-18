@@ -24,7 +24,7 @@ export async function GET(req) {
     const folderLogs = [];
 
     for await (const line of rl) {
-      if (folderLogs.length >= 1000) break;
+      if (folderLogs.length >= 100) break;
 
       try {
         const entry = JSON.parse(line);
