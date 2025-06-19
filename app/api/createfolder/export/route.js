@@ -23,8 +23,6 @@ export async function GET(req) {
     const folderLogs = [];
 
     for await (const line of rl) {
-      if (folderLogs.length >= 1000) break;
-
       try {
         const entry = JSON.parse(line);
 
@@ -57,7 +55,6 @@ export async function GET(req) {
         const match = entry.message.match(/File with id "(.*?)" written to:/);
         const folderId = match?.[1] || "Unknown";
 
-        // 🔍 Ambil dan decode path dari URL
         const urlMatch = entry.url.match(
           /\/remote\.php\/dav\/files\/[^/]+\/(.*)/
         );
@@ -66,7 +63,6 @@ export async function GET(req) {
           : "Unknown";
 
         folderLogs.push({
-          ID: folderLogs.length + 1,
           User: entry.user,
           FolderID: folderId,
           Message: `Folder "${folderPath}" (ID: ${folderId}) dibuat oleh "${entry.user}"`,
@@ -74,24 +70,29 @@ export async function GET(req) {
           Waktu: entry.time,
         });
       } catch {
-        // skip error
+        // skip invalid lines
       }
     }
 
+    // Urutkan berdasarkan waktu terbaru, ambil hanya 300 teratas
     folderLogs.sort((a, b) => new Date(b.Waktu) - new Date(a.Waktu));
+    const latest300 = folderLogs.slice(0, 300).map((entry, index) => ({
+      ID: index + 1,
+      ...entry,
+    }));
 
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Folder Creation Logs");
 
-    if (folderLogs.length > 0) {
-      worksheet.columns = Object.keys(folderLogs[0]).map((key) => ({
+    if (latest300.length > 0) {
+      worksheet.columns = Object.keys(latest300[0]).map((key) => ({
         header: key,
         key,
         width: 30,
       }));
     }
 
-    folderLogs.forEach((entry) => {
+    latest300.forEach((entry) => {
       worksheet.addRow(entry);
     });
 

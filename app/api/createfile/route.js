@@ -25,8 +25,6 @@ export async function GET(req) {
     const uploadLogs = [];
 
     for await (const line of rl) {
-      if (uploadLogs.length >= 100) break;
-
       try {
         const entry = JSON.parse(line);
 
@@ -38,8 +36,8 @@ export async function GET(req) {
         if (!isUpload) continue;
 
         const logDate = new Date(entry.time);
-
         let isIncluded = false;
+
         if (filterTime === "daily") {
           isIncluded = logDate.toDateString() === now.toDateString();
         } else if (filterTime === "weekly") {
@@ -51,7 +49,7 @@ export async function GET(req) {
             logDate.getMonth() === now.getMonth() &&
             logDate.getFullYear() === now.getFullYear();
         } else {
-          isIncluded = true; // default: tampilkan semua
+          isIncluded = true;
         }
 
         if (!isIncluded) continue;
@@ -72,14 +70,17 @@ export async function GET(req) {
           time: entry.time,
         });
       } catch {
-        // skip jika JSON.parse error
-        continue;
+        continue; // skip invalid JSON
       }
     }
 
+    // Sortir berdasarkan waktu terbaru
     uploadLogs.sort((a, b) => new Date(b.time) - new Date(a.time));
 
-    return new Response(JSON.stringify(uploadLogs.slice(0, 100)), {
+    // Ambil hanya 100 data terbaru
+    const latest100 = uploadLogs.slice(0, 100);
+
+    return new Response(JSON.stringify(latest100), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });

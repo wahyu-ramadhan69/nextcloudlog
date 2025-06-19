@@ -23,8 +23,6 @@ export async function GET(req) {
     const uploadLogs = [];
 
     for await (const line of rl) {
-      if (uploadLogs.length >= 1000) break;
-
       try {
         const entry = JSON.parse(line);
 
@@ -74,20 +72,24 @@ export async function GET(req) {
       }
     }
 
+    // Urutkan berdasarkan waktu terbaru
     uploadLogs.sort((a, b) => new Date(b.Time) - new Date(a.Time));
+
+    // Ambil hanya 300 data terbaru
+    const latest300 = uploadLogs.slice(0, 300);
 
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Upload Logs");
 
-    if (uploadLogs.length > 0) {
-      worksheet.columns = Object.keys(uploadLogs[0]).map((key) => ({
+    if (latest300.length > 0) {
+      worksheet.columns = Object.keys(latest300[0]).map((key) => ({
         header: key,
         key,
         width: 30,
       }));
     }
 
-    uploadLogs.forEach((entry) => {
+    latest300.forEach((entry) => {
       worksheet.addRow(entry);
     });
 
