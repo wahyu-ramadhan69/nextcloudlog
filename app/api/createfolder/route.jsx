@@ -1,30 +1,44 @@
-import fs from "fs";
-import readLastLines from "read-last-lines";
+import fs from "fs/promises";
 
 export async function GET(req) {
   try {
     const logPath = process.env.LOG_PATH;
-    if (!logPath || !fs.existsSync(logPath)) {
-      return new Response(JSON.stringify({ error: "Log file not found" }), {
-        status: 404,
+    if (!logPath) {
+      return new Response(JSON.stringify({ error: "Log path not defined" }), {
+        status: 400,
         headers: { "Content-Type": "application/json" },
       });
     }
+
+    const fileHandle = await fs.open(logPath, "r");
+    const stats = await fileHandle.stat();
+    const CHUNK_SIZE = 4096; // 4KB chunk
+    let position = stats.size;
+    let buffer = Buffer.alloc(0);
+    let lines = [];
+
+    while (position > 0 && lines.length < 200) {
+      const readSize = Math.min(CHUNK_SIZE, position);
+      position -= readSize;
+      const chunk = Buffer.alloc(readSize);
+      await fileHandle.read(chunk, 0, readSize, position);
+      buffer = Buffer.concat([chunk, buffer]);
+
+      const parts = buffer.toString("utf8").split("\n");
+      lines = parts.slice(-201); // jaga-jaga biar tidak potong
+      buffer = Buffer.from(parts.slice(0, -201).join("\n"));
+    }
+
+    await fileHandle.close();
 
     const { searchParams } = new URL(req.url);
     const filter = searchParams.get("filter") || "all";
     const now = new Date();
 
-    // Ambil 500 baris terakhir, lebih banyak agar bisa difilter, nanti di-trim jadi 100
-    const lines = (await readLastLines.read(logPath, 500))
-      .split("\n")
-      .reverse();
-
     const folderLogs = [];
 
-    for (const line of lines) {
+    for (const line of lines.reverse()) {
       if (folderLogs.length >= 100) break;
-
       try {
         const entry = JSON.parse(line);
 
@@ -73,7 +87,7 @@ export async function GET(req) {
           Waktu: entry.time,
         });
       } catch {
-        // Skip invalid JSON
+        // skip invalid JSON
       }
     }
 
@@ -82,7 +96,7 @@ export async function GET(req) {
       headers: { "Content-Type": "application/json" },
     });
   } catch (err) {
-    console.error("Error reading folder creation logs:", err);
+    console.error("Error:", err);
     return new Response(JSON.stringify({ error: "Internal Server Error" }), {
       status: 500,
       headers: { "Content-Type": "application/json" },
