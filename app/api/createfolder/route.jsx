@@ -1,5 +1,5 @@
 import fs from "fs";
-import readline from "readline";
+import readLastLines from "read-last-lines";
 
 export async function GET(req) {
   try {
@@ -15,16 +15,15 @@ export async function GET(req) {
     const filter = searchParams.get("filter") || "all";
     const now = new Date();
 
-    const fileStream = fs.createReadStream(logPath, { encoding: "utf8" });
-    const rl = readline.createInterface({
-      input: fileStream,
-      crlfDelay: Infinity,
-    });
+    // Ambil 500 baris terakhir, lebih banyak agar bisa difilter, nanti di-trim jadi 100
+    const lines = (await readLastLines.read(logPath, 500))
+      .split("\n")
+      .reverse();
 
     const folderLogs = [];
 
-    for await (const line of rl) {
-      if (folderLogs.length >= 1000) break;
+    for (const line of lines) {
+      if (folderLogs.length >= 100) break;
 
       try {
         const entry = JSON.parse(line);
@@ -58,7 +57,6 @@ export async function GET(req) {
         const match = entry.message.match(/File with id "(.*?)" written to:/);
         const folderId = match?.[1] || "Unknown";
 
-        // 🔍 Ambil full path dari URL setelah nama user
         const urlMatch = entry.url.match(
           /\/remote\.php\/dav\/files\/[^/]+\/(.*)/
         );
@@ -79,9 +77,7 @@ export async function GET(req) {
       }
     }
 
-    folderLogs.sort((a, b) => new Date(b.Waktu) - new Date(a.Waktu));
-
-    return new Response(JSON.stringify(folderLogs.slice(0, 1000)), {
+    return new Response(JSON.stringify(folderLogs), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
