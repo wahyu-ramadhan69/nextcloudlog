@@ -1,29 +1,26 @@
 import fs from "fs";
-import readline from "readline";
+import readLastLines from "read-last-lines";
 
 export async function GET(req) {
   try {
     const logPath = process.env.LOG_PATH;
     if (!logPath || !fs.existsSync(logPath)) {
-      return new Response(JSON.stringify({ error: "Log file not found" }), {
-        status: 404,
-        headers: { "Content-Type": "application/json" },
-      });
+      return new Response("Log file not found", { status: 404 });
     }
 
     const { searchParams } = new URL(req.url);
     const filter = searchParams.get("filter") || "all";
     const now = new Date();
 
-    const fileStream = fs.createReadStream(logPath, { encoding: "utf8" });
-    const rl = readline.createInterface({
-      input: fileStream,
-      crlfDelay: Infinity,
-    });
+    // Ambil 5000 baris terakhir (jaga-jaga sebagian tidak valid)
+    const lines = (await readLastLines.read(logPath, 5000))
+      .split("\n")
+      .reverse()
+      .filter((line) => line.trim() !== "");
 
     const folderLogs = [];
 
-    for await (const line of rl) {
+    for (const line of lines) {
       if (folderLogs.length >= 1000) break;
 
       try {
@@ -58,7 +55,6 @@ export async function GET(req) {
         const match = entry.message.match(/File with id "(.*?)" written to:/);
         const folderId = match?.[1] || "Unknown";
 
-        // 🔍 Ambil full path dari URL setelah nama user
         const urlMatch = entry.url.match(
           /\/remote\.php\/dav\/files\/[^/]+\/(.*)/
         );
@@ -71,25 +67,21 @@ export async function GET(req) {
           User: entry.user,
           FolderID: folderId,
           Message: `Folder "${folderPath}" (ID: ${folderId}) dibuat oleh "${entry.user}"`,
+          url: entry.url,
           Path: folderPath,
           Waktu: entry.time,
         });
       } catch {
-        // Skip invalid JSON
+        continue;
       }
     }
 
-    folderLogs.sort((a, b) => new Date(b.Waktu) - new Date(a.Waktu));
-
-    return new Response(JSON.stringify(folderLogs.slice(0, 1000)), {
+    return new Response(JSON.stringify(folderLogs), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
   } catch (err) {
-    console.error("Error reading folder creation logs:", err);
-    return new Response(JSON.stringify({ error: "Internal Server Error" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    console.error("Error reading tail logs:", err);
+    return new Response("Internal Server Error", { status: 500 });
   }
 }

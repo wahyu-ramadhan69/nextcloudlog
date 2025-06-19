@@ -23,7 +23,7 @@ export default function FolderCreatedPage() {
             message: entry.Message || "-",
             time: entry.Time || "-",
             url: entry.URL || "-",
-            path: entry.FolderPath || "-",
+            path: entry.Path || "-",
           }));
 
           setFolders(formattedFolders);
