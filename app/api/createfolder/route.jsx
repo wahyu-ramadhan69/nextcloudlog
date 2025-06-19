@@ -1,49 +1,29 @@
-import fs from "fs/promises";
+import fs from "fs";
+import readline from "readline";
 
 export async function GET(req) {
   try {
     const logPath = process.env.LOG_PATH;
-    if (!logPath) {
-      return new Response(JSON.stringify({ error: "LOG_PATH not defined" }), {
-        status: 400,
+    if (!logPath || !fs.existsSync(logPath)) {
+      return new Response(JSON.stringify({ error: "Log file not found" }), {
+        status: 404,
         headers: { "Content-Type": "application/json" },
       });
     }
-
-    const fileHandle = await fs.open(logPath, "r");
-    const stats = await fileHandle.stat();
-    const CHUNK_SIZE = 8192; // 8KB
-    let position = stats.size;
-    let leftover = "";
-    const lines = [];
-
-    // Baca mundur hingga cukup banyak baris
-    while (position > 0 && lines.length < 500) {
-      const readSize = Math.min(CHUNK_SIZE, position);
-      position -= readSize;
-
-      const buffer = Buffer.alloc(readSize);
-      await fileHandle.read(buffer, 0, readSize, position);
-
-      const chunkText = buffer.toString("utf8") + leftover;
-      const split = chunkText.split("\n");
-      leftover = split.shift() ?? "";
-
-      lines.unshift(...split);
-    }
-
-    await fileHandle.close();
 
     const { searchParams } = new URL(req.url);
     const filter = searchParams.get("filter") || "all";
     const now = new Date();
 
-    const folderLogs = [];
+    const fileStream = fs.createReadStream(logPath, { encoding: "utf8" });
+    const rl = readline.createInterface({
+      input: fileStream,
+      crlfDelay: Infinity,
+    });
 
-    for (const line of lines.reverse()) {
-      if (folderLogs.length >= 10000) break;
-      if (!line.trim()) continue;
+    const filteredLogs = [];
 
+    for await (const line of rl) {
       try {
         const entry = JSON.parse(line);
 
@@ -83,8 +63,7 @@ export async function GET(req) {
           ? decodeURIComponent(urlMatch[1])
           : "Unknown";
 
-        folderLogs.push({
-          ID: folderLogs.length + 1,
+        filteredLogs.push({
           User: entry.user,
           FolderID: folderId,
           Message: `Folder "${folderPath}" (ID: ${folderId}) dibuat oleh "${entry.user}"`,
@@ -92,16 +71,26 @@ export async function GET(req) {
           Waktu: entry.time,
         });
       } catch {
-        // Lewati baris invalid
+        // Skip invalid JSON
       }
     }
 
-    return new Response(JSON.stringify(folderLogs), {
+    // Urutkan dari yang terbaru dan ambil hanya 100 teratas
+    filteredLogs.sort((a, b) => new Date(b.Waktu) - new Date(a.Waktu));
+    const latest100 = filteredLogs.slice(0, 100);
+
+    // Tambahkan ID setelah sortir dan slicing
+    const result = latest100.map((entry, index) => ({
+      ID: index + 1,
+      ...entry,
+    }));
+
+    return new Response(JSON.stringify(result), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
   } catch (err) {
-    console.error("❌ Error:", err);
+    console.error("Error reading folder creation logs:", err);
     return new Response(JSON.stringify({ error: "Internal Server Error" }), {
       status: 500,
       headers: { "Content-Type": "application/json" },
