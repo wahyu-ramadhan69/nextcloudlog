@@ -4,7 +4,7 @@ export async function GET(req) {
   try {
     const logPath = process.env.LOG_PATH;
     if (!logPath) {
-      return new Response(JSON.stringify({ error: "Log path not defined" }), {
+      return new Response(JSON.stringify({ error: "LOG_PATH not defined" }), {
         status: 400,
         headers: { "Content-Type": "application/json" },
       });
@@ -12,21 +12,24 @@ export async function GET(req) {
 
     const fileHandle = await fs.open(logPath, "r");
     const stats = await fileHandle.stat();
-    const CHUNK_SIZE = 4096; // 4KB chunk
+    const CHUNK_SIZE = 8192; // 8KB
     let position = stats.size;
-    let buffer = Buffer.alloc(0);
-    let lines = [];
+    let leftover = "";
+    const lines = [];
 
-    while (position > 0 && lines.length < 200) {
+    // Baca mundur hingga cukup banyak baris
+    while (position > 0 && lines.length < 500) {
       const readSize = Math.min(CHUNK_SIZE, position);
       position -= readSize;
-      const chunk = Buffer.alloc(readSize);
-      await fileHandle.read(chunk, 0, readSize, position);
-      buffer = Buffer.concat([chunk, buffer]);
 
-      const parts = buffer.toString("utf8").split("\n");
-      lines = parts.slice(-201); // jaga-jaga biar tidak potong
-      buffer = Buffer.from(parts.slice(0, -201).join("\n"));
+      const buffer = Buffer.alloc(readSize);
+      await fileHandle.read(buffer, 0, readSize, position);
+
+      const chunkText = buffer.toString("utf8") + leftover;
+      const split = chunkText.split("\n");
+      leftover = split.shift() ?? "";
+
+      lines.unshift(...split);
     }
 
     await fileHandle.close();
@@ -38,7 +41,9 @@ export async function GET(req) {
     const folderLogs = [];
 
     for (const line of lines.reverse()) {
-      if (folderLogs.length >= 100) break;
+      if (folderLogs.length >= 10000) break;
+      if (!line.trim()) continue;
+
       try {
         const entry = JSON.parse(line);
 
@@ -87,7 +92,7 @@ export async function GET(req) {
           Waktu: entry.time,
         });
       } catch {
-        // skip invalid JSON
+        // Lewati baris invalid
       }
     }
 
@@ -96,7 +101,7 @@ export async function GET(req) {
       headers: { "Content-Type": "application/json" },
     });
   } catch (err) {
-    console.error("Error:", err);
+    console.error("❌ Error:", err);
     return new Response(JSON.stringify({ error: "Internal Server Error" }), {
       status: 500,
       headers: { "Content-Type": "application/json" },
