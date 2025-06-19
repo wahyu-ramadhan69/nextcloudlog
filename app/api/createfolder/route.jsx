@@ -13,6 +13,8 @@ export async function GET(req) {
     const now = new Date();
 
     // Ambil 5000 baris terakhir (jaga-jaga sebagian tidak valid)
+    console.log("masuk kesini");
+
     const lines = (await readLastLines.read(logPath, 5000))
       .split("\n")
       .reverse()
